@@ -1,0 +1,48 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── User data: only the authenticated owner can read/write ──────────────
+    match /appData/{userId} {
+
+      allow read, write: if
+        // Must be signed in
+        request.auth != null &&
+        // Must be the document owner
+        request.auth.uid == userId;
+
+      // ── Write validation (create & update) ─────────────────────────────
+      allow create, update: if
+        request.auth != null &&
+        request.auth.uid == userId &&
+        isValidAppData(request.resource.data);
+    }
+
+    // ── Deny everything else by default ─────────────────────────────────────
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function isValidAppData(data) {
+  return
+    // Required top-level fields
+    data.keys().hasAll(['monthlyIncome', 'monthlyBudget', 'transactions']) &&
+
+    // Type checks
+    data.monthlyIncome  is number &&
+    data.monthlyBudget  is number &&
+    data.transactions   is list   &&
+
+    // Sane value ranges
+    data.monthlyIncome  >= 0 &&
+    data.monthlyIncome  <= 100000000 &&
+    data.monthlyBudget  >= 0 &&
+    data.monthlyBudget  <= 100000000 &&
+
+    // Transaction list size guard (max 5000 entries)
+    data.transactions.size() <= 5000;
+}
