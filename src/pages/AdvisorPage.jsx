@@ -23,134 +23,126 @@ export function AdvisorPage({ data, financials, fmt }) {
       });
       setAdvice(text);
     } catch (err) {
-      setErrMsg(`⚠️ ${err.message}`);
+      setErrMsg(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const rules = [
-    { l: "50%", d: "Needs — Rent, EMIs, Groceries, Bills",    t: (data.monthlyIncome || 0) * 0.5, c: "#FF6B6B" },
-    { l: "30%", d: "Wants — Dining, Shopping, Entertainment", t: (data.monthlyIncome || 0) * 0.3, c: "#FBBF24" },
-    { l: "20%", d: "Savings — SIP, FD, Emergency Fund",       t: (data.monthlyIncome || 0) * 0.2, c: "#C8FA64" },
+    { l: "50%", d: "Needs — Rent, EMIs, Bills",    t: (data.monthlyIncome || 0) * 0.5, c: "#FF6B6B" },
+    { l: "30%", d: "Wants — Lifestyle, Dining",    t: (data.monthlyIncome || 0) * 0.3, c: "#FBBF24" },
+    { l: "20%", d: "Savings — Investments",       t: (data.monthlyIncome || 0) * 0.2, c: "#C8FA64" },
   ];
 
-  const scoreColor = sRate >= 20 ? "#C8FA64" : sRate >= 10 ? "#FBBF24" : "#FF6B6B";
-  const scoreLabel = sRate >= 30 ? "Excellent — building real wealth"
-                   : sRate >= 20 ? "Good — stay consistent"
-                   : sRate >= 10 ? "Average — push to 20%"
-                   : "Critical — review expenses now";
+  const scoreColor = sRate >= 20 ? "var(--paisa-green)" : sRate >= 10 ? "#FBBF24" : "var(--paisa-red)";
 
   return (
     <PageMotion>
       <div className="pg">
-        <p className="ptitle">CA Advisor</p>
+        <p className="ptitle">Advisor</p>
 
-        {/* Savings Rate Hero */}
+        {/* Savings Rate Card */}
         <motion.div
           className="gc"
-          style={{ marginBottom: 14, textAlign: "center", padding: "28px 20px", background: "linear-gradient(135deg,rgba(200,250,100,0.05),rgba(0,0,0,0))" }}
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ delay: 0.05 }}
+          style={{ marginBottom: 20, textAlign: "center", padding: "40px 24px" }}
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
         >
-          <p className="ey">Your Savings Rate</p>
-          <p style={{ fontFamily: "'Bricolage Grotesque',serif", fontSize: 52, fontWeight: 900, color: scoreColor, lineHeight: 1, marginTop: 6 }}>
-            {sRate.toFixed(0)}<span style={{ fontSize: 24 }}>%</span>
+          <p className="ey">Current Savings Rate</p>
+          <p style={{ fontFamily: "'Bricolage Grotesque',serif", fontSize: 64, fontWeight: 900, color: scoreColor, lineHeight: 1, marginTop: 8, letterSpacing: "-0.04em" }}>
+            {sRate.toFixed(0)}<span style={{ fontSize: 28, opacity: 0.6 }}>%</span>
           </p>
-          <p style={{ fontSize: 12, color: "#a1a1aa", marginTop: 6 }}>{scoreLabel}</p>
         </motion.div>
 
-        {/* 50-30-20 Rule */}
-        <div className="gc" style={{ marginBottom: 14 }}>
-          <p className="sh">50–30–20 for {data.monthlyIncome > 0 ? `₹${((data.monthlyIncome || 0) / 1000).toFixed(0)}K/mo` : "your income"}</p>
-          {rules.map(r => (
-            <div key={r.l} style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 14 }}>
-              <div style={{ width: 40, height: 40, borderRadius: 12, background: `${r.c}18`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, color: r.c, flexShrink: 0 }}>{r.l}</div>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: 12, color: "#a1a1aa", marginBottom: 4 }}>{r.d}</p>
+        {/* Rule 50-30-20 */}
+        <div className="gc" style={{ marginBottom: 20 }}>
+          <p className="sh">Budget Allocation (50-30-20)</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {rules.map(r => (
+              <div key={r.l}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                  <p style={{ fontSize: 13, fontWeight: 600, color: "#fff" }}>{r.d}</p>
+                  <p style={{ fontSize: 13, fontWeight: 800, color: r.c }}>{fmt(r.t)}</p>
+                </div>
                 <div className="st">
-                  <div className="sf" style={{ width: `${r.t > 0 ? Math.min(100, safe(spent / r.t * 50)) : 0}%`, background: r.c }} />
+                  <div className="sf" style={{ width: `${r.t > 0 ? Math.min(100, (spent / (data.monthlyIncome || 1)) * 100) : 0}%`, background: r.c, opacity: 0.8 }} />
                 </div>
               </div>
-              <p style={{ fontSize: 14, fontWeight: 700, color: r.c, flexShrink: 0 }}>{fmt(r.t)}</p>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
 
-        {/* AI CTA Button */}
+        {/* AI Action */}
         <motion.button
           id="advisor-cta"
           className="ctab"
           onClick={go}
           disabled={loading}
-          style={{ marginBottom: 16 }}
-          whileHover={!loading ? { y: -2 } : {}}
-          whileTap={!loading ? { scale: 0.98 } : {}}
+          style={{ marginBottom: 24 }}
         >
-          {loading ? (
-            <span style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
-              {["●", "●", "●"].map((d, i) => (
-                <motion.span
-                  key={i}
-                  animate={{ opacity: [0, 1, 0] }}
-                  transition={{ duration: 1.2, delay: i * 0.2, repeat: Infinity }}
-                  style={{ fontSize: 16, color: "#000" }}
-                >
-                  {d}
-                </motion.span>
-              ))}
-            </span>
-          ) : "✦  Get My Personalised CA Report"}
+          {loading ? "Analyzing Portfolio..." : "✦ Generate AI Financial Report"}
         </motion.button>
+
+        {/* Loading State / Shimmer */}
+        {loading && (
+          <div className="gc" style={{ marginBottom: 20, borderStyle: "dashed" }}>
+            <div className="shimmer" style={{ width: "40%", height: 14, marginBottom: 16 }} />
+            <div className="shimmer" style={{ width: "100%", height: 12, marginBottom: 10 }} />
+            <div className="shimmer" style={{ width: "90%", height: 12, marginBottom: 10 }} />
+            <div className="shimmer" style={{ width: "95%", height: 12 }} />
+          </div>
+        )}
 
         {/* Error */}
         <AnimatePresence>
           {errMsg && (
             <motion.div
-              initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
-              style={{ background: "rgba(255,107,107,0.08)", border: "1px solid rgba(255,107,107,0.2)", borderRadius: 16, padding: "16px 18px", marginBottom: 14 }}
+              initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }}
+              style={{ background: "rgba(255,107,107,0.05)", border: "1.5px solid rgba(255,107,107,0.15)", borderRadius: 20, padding: 20, marginBottom: 20 }}
             >
-              <p style={{ fontSize: 13, color: "#FF6B6B", lineHeight: 1.7 }}>{errMsg}</p>
+              <p style={{ fontSize: 14, color: "var(--paisa-red)", lineHeight: 1.6, fontWeight: 500 }}>{errMsg}</p>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* AI Report */}
+        {/* AI Response */}
         <AnimatePresence>
           {advice && (
             <motion.div
-              initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
               className="gc"
-              style={{ borderColor: "rgba(200,250,100,0.2)", background: "linear-gradient(135deg,rgba(200,250,100,0.03),transparent)", marginBottom: 14 }}
+              style={{ background: "linear-gradient(135deg, rgba(200, 250, 100, 0.04), transparent)", borderColor: "rgba(200, 250, 100, 0.2)", marginBottom: 20 }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
-                <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#C8FA64", display: "inline-block", boxShadow: "0 0 8px #C8FA64" }} />
-                <span style={{ fontSize: 11, fontWeight: 700, color: "#C8FA64", letterSpacing: "0.08em" }}>
-                  AI CA ANALYSIS · {new Date().toLocaleDateString("en-IN")}
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+                <span style={{ width: 10, height: 10, borderRadius: "50%", background: "var(--paisa-green)", boxShadow: "0 0 15px var(--paisa-green)" }} />
+                <span style={{ fontSize: 12, fontWeight: 800, color: "var(--paisa-green)", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+                  Intelligence Report
                 </span>
               </div>
-              <p style={{ fontSize: 14, lineHeight: 1.85, color: "#d4d4d8", whiteSpace: "pre-line" }}>{advice}</p>
+              <div style={{ fontSize: 15, lineHeight: 1.9, color: "#E4E4E7", whiteSpace: "pre-line", fontWeight: 400 }}>
+                {advice}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
 
-        {/* Static CA Hacks */}
+        {/* Indian Financial Hacks */}
         <div className="gc">
-          <p className="sh">CA-Approved Hacks 🇮🇳</p>
-          {[
-            "₹1,000/mo SIP in Nifty 50 Index Fund → ₹23L+ in 10 years at 12%",
-            "6-month emergency fund in Liquid Fund (better returns than savings a/c)",
-            "PPF: ₹1.5L/year = tax-free 7.1% + Section 80C deduction",
-            "Use credit card for all expenses → cashback/air miles on essentials",
-            "Annual OTT plans save 30-40% vs monthly renewals",
-            "D-Mart bulk buying for staples = ~18% savings vs daily kirana",
-          ].map((tip, i) => (
-            <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10, alignItems: "flex-start" }}>
-              <span style={{ color: "#C8FA64", fontSize: 12, marginTop: 2, flexShrink: 0 }}>→</span>
-              <p style={{ fontSize: 13, color: "#a1a1aa", lineHeight: 1.6 }}>{tip}</p>
-            </div>
-          ))}
+          <p className="sh">Pro Tips for India 🇮🇳</p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {[
+              "Maximize 80C with ELSS for shorter lock-in vs PPF.",
+              "Use a Liquid Fund for your emergency corpus for 6-7% returns.",
+              "Annual insurance payments are ~10% cheaper than monthly.",
+              "D-Mart bulk buying saves ~15% on monthly household staples."
+            ].map((tip, i) => (
+              <div key={i} style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--paisa-green)", flexShrink: 0 }} />
+                <p style={{ fontSize: 14, color: "var(--text-secondary)", lineHeight: 1.5 }}>{tip}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </PageMotion>

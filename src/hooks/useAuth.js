@@ -1,11 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
-import { auth, provider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "../lib/firebase";
-import { isMobile } from "../utils/formatters";
+import { auth, provider, signInWithRedirect, getRedirectResult, signOut, onAuthStateChanged } from "../lib/firebase";
 
 /**
  * Manages the full Firebase auth lifecycle:
- * - Detects redirect result on mobile
- * - Uses popup on desktop, redirect on mobile
+ * - Uses redirect-based sign-in (production standard for PWAs)
+ * - Guards against redirect loops using sessionStorage
  * - Exposes authState: "loading" | "signed-out" | "signed-in"
  */
 export function useAuth() {
@@ -13,53 +12,69 @@ export function useAuth() {
   const [user, setUser]           = useState(null);
   const [error, setError]         = useState("");
 
-  // Handle redirect result (mobile sign-in returns here after redirect)
+  // Handle redirect result (returns here after Google redirect)
   useEffect(() => {
+    // Check if we already handled this redirect in this tab session to prevent loops
+    if (sessionStorage.getItem("paisa_auth_handled")) {
+      return;
+    }
+
     getRedirectResult(auth)
       .then((result) => {
+        // Mark as handled immediately to block loops on reloads
+        sessionStorage.setItem("paisa_auth_handled", "true");
+        
         if (result?.user) {
           setUser(result.user);
           setAuthState("signed-in");
         }
       })
       .catch((err) => {
-        console.error("Redirect result error:", err);
-        // Non-fatal — redirect may simply not have happened
+        console.error("Redirect error:", err);
+        sessionStorage.setItem("paisa_auth_handled", "true");
+        
+        // Map common errors to friendly messages
+        const messages = {
+          "auth/credential-already-in-use": "This Google account is already linked.",
+          "auth/network-request-failed":   "Network error. Please check your connection.",
+        };
+        setError(messages[err.code] || "Sign-in failed. Please try again.");
       });
   }, []);
 
   // Subscribe to auth state
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) { setUser(u); setAuthState("signed-in"); }
-      else   { setUser(null); setAuthState("signed-out"); }
+      if (u) {
+        setUser(u);
+        setAuthState("signed-in");
+      } else {
+        setUser(null);
+        setAuthState("signed-out");
+      }
     });
     return unsub;
   }, []);
 
   const signIn = useCallback(async () => {
     setError("");
+    // Reset guard before starting a fresh flow
+    sessionStorage.removeItem("paisa_auth_handled");
     try {
-      if (isMobile()) {
-        await signInWithRedirect(auth, provider);
-        // Page will redirect — nothing more to do here
-      } else {
-        await signInWithPopup(auth, provider);
-      }
+      await signInWithRedirect(auth, provider);
     } catch (err) {
-      console.error("Sign-in error:", err);
-      const codes = {
-        "auth/popup-closed-by-user":   "Sign-in cancelled. Please try again.",
-        "auth/popup-blocked":          "Popup blocked. Please allow popups for this site.",
-        "auth/network-request-failed": "Network error. Check your connection.",
-        "auth/cancelled-popup-request":"Sign-in cancelled. Please try again.",
-      };
-      setError(codes[err.code] || "Sign-in failed. Please try again.");
+      console.error("Redirect start error:", err);
+      setError("Could not start Google sign-in.");
     }
   }, []);
 
   const signOutUser = useCallback(async () => {
-    try { await signOut(auth); } catch (err) { console.error("Sign-out error:", err); }
+    try {
+      sessionStorage.removeItem("paisa_auth_handled");
+      await signOut(auth);
+    } catch (err) {
+      console.error("Sign-out error:", err);
+    }
   }, []);
 
   return { authState, user, error, signIn, signOutUser };

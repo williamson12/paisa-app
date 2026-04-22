@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback } from "react";
 import { subscribeToUserData, saveUserData } from "../services/firestore";
-import { DEFAULT_DATA } from "../utils/constants";
+import { DEFAULT_DATA, STORAGE_KEY } from "../utils/constants";
 
 /**
- * Manages the user's financial data:
- * - Subscribes to Firestore with offline fallback
- * - Exposes a save() function that writes to both localStorage + Firestore
+ * Manages the user's financial data with a layered strategy:
+ * 1. Immediate: Load from localStorage for zero-flicker UX.
+ * 2. Background: Sync from Firestore and update state.
  */
 export function useUserData(userId) {
-  const [data, setData]       = useState(DEFAULT_DATA);
+  const [data, setData] = useState(() => {
+    try {
+      const local = localStorage.getItem(STORAGE_KEY);
+      return local ? JSON.parse(local) : DEFAULT_DATA;
+    } catch {
+      return DEFAULT_DATA;
+    }
+  });
+  
   const [loaded, setLoaded]   = useState(false);
   const [needsSetup, setNeedsSetup] = useState(false);
 
@@ -17,27 +25,30 @@ export function useUserData(userId) {
 
     const unsub = subscribeToUserData(
       userId,
-      (d) => {
-        setData(d);
-        setNeedsSetup(false);
+      (firestoreData) => {
+        setData(firestoreData);
+        // If income is not set, we need the onboarding prompt
+        setNeedsSetup(!firestoreData.monthlyIncome);
         setLoaded(true);
       },
       () => {
-        setNeedsSetup(true);
+        // Fallback or No Data: check if the current data (from local) is empty
+        if (!data.monthlyIncome) {
+          setNeedsSetup(true);
+        }
         setLoaded(true);
       }
     );
 
     return unsub;
-  }, [userId]);
+  }, [userId, data.monthlyIncome]);
 
   const save = useCallback(async (newData) => {
-    setData(newData); // Optimistic update
+    setData(newData); // Optimistic UI update
     try {
       await saveUserData(userId, newData);
     } catch (err) {
-      console.error("Save error:", err);
-      // Data already in localStorage via service — no crash
+      console.error("Save failed:", err);
     }
   }, [userId]);
 
