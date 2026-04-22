@@ -113,7 +113,7 @@ ${JSON.stringify(sanitized, null, 2)}`;
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.0-pro",
+      model: "gemini-1.5-flash",
     });
 
     let text = null;
@@ -153,7 +153,7 @@ ${JSON.stringify(sanitized, null, 2)}`;
       statusCode: 502,
       headers: CORS,
       body: JSON.stringify({
-        error: `Gemini Error: ${err.message}`,
+        error: "Our AI advisor is currently busy. Please try again in a moment.",
       }),
     };
   }
