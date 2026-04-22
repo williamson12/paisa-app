@@ -1,6 +1,8 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
+
 /**
  * Netlify Function: /api/advisor
- * Proxies Gemini requests server-side so the API key is never exposed to the client.
+ * Secure Gemini proxy (server-side)
  */
 export const handler = async (event) => {
   const CORS = {
@@ -9,13 +11,18 @@ export const handler = async (event) => {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
   };
 
-  // Handle CORS preflight
+  // ✅ CORS preflight
   if (event.httpMethod === "OPTIONS") {
     return { statusCode: 204, headers: CORS, body: "" };
   }
 
+  // ✅ Only POST allowed
   if (event.httpMethod !== "POST") {
-    return { statusCode: 405, headers: CORS, body: JSON.stringify({ error: "Method not allowed" }) };
+    return {
+      statusCode: 405,
+      headers: CORS,
+      body: JSON.stringify({ error: "Method not allowed" }),
+    };
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -23,20 +30,34 @@ export const handler = async (event) => {
     return {
       statusCode: 500,
       headers: CORS,
-      body: JSON.stringify({ error: "Server misconfiguration: GEMINI_API_KEY not set." }),
+      body: JSON.stringify({
+        error: "Server misconfiguration: GEMINI_API_KEY not set.",
+      }),
     };
   }
 
+  // ✅ Parse request body
   let payload;
   try {
     payload = JSON.parse(event.body);
   } catch {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Invalid JSON body." }) };
+    return {
+      statusCode: 400,
+      headers: CORS,
+      body: JSON.stringify({ error: "Invalid JSON body." }),
+    };
   }
 
-  const { monthlyIncome, totalSpent, balance, savings, savingsRate, topCategories } = payload;
+  const {
+    monthlyIncome,
+    totalSpent,
+    balance,
+    savings,
+    savingsRate,
+    topCategories,
+  } = payload;
 
-  // Input validation
+  // ✅ Validation
   if (
     typeof monthlyIncome !== "number" ||
     typeof totalSpent !== "number" ||
@@ -45,9 +66,14 @@ export const handler = async (event) => {
     typeof savingsRate !== "string" ||
     !Array.isArray(topCategories)
   ) {
-    return { statusCode: 400, headers: CORS, body: JSON.stringify({ error: "Invalid payload fields." }) };
+    return {
+      statusCode: 400,
+      headers: CORS,
+      body: JSON.stringify({ error: "Invalid payload fields." }),
+    };
   }
 
+  // ✅ Sanitization
   const sanitized = {
     monthlyIncome: Math.max(0, Math.min(monthlyIncome, 100_000_000)),
     totalSpent: Math.max(0, Math.min(totalSpent, 100_000_000)),
@@ -60,6 +86,7 @@ export const handler = async (event) => {
     })),
   };
 
+  // ✅ Prompt
   const prompt = `You are India's top CA and personal finance advisor. Be direct, precise, actionable. Indian context (SIP, FD, PPF, ELSS, NPS). Premium tone — no fluff. Structure exactly:
 
 SCORE: [X/10] — [one sharp sentence]
@@ -78,42 +105,27 @@ SCORE: [X/10] — [one sharp sentence]
 
 Max 280 words. No generic advice.
 
-Finances:\n${JSON.stringify(sanitized, null, 2)}`;
+Finances:
+${JSON.stringify(sanitized, null, 2)}`;
 
   try {
-    const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
-      }
-    );
+    // ✅ Gemini SDK usage (FIXED PART)
+    const genAI = new GoogleGenerativeAI(apiKey);
 
-    if (!geminiRes.ok) {
-      const errBody = await geminiRes.json().catch(() => ({}));
-      const msg = errBody?.error?.message || geminiRes.statusText;
-      return {
-        statusCode: geminiRes.status,
-        headers: CORS,
-        body: JSON.stringify({ error: `Gemini error: ${msg}` }),
-      };
-    }
+    const model = genAI.getGenerativeModel({
+      model: "gemini-1.5-flash",
+    });
 
-    const data = await geminiRes.json();
-    const candidate = data.candidates?.[0];
-    if (!candidate) {
-      const blockReason = data.promptFeedback?.blockReason;
+    const result = await model.generateContent(prompt);
+    const response = await result.response;
+    const text = response.text();
+
+    if (!text) {
       return {
         statusCode: 502,
         headers: CORS,
-        body: JSON.stringify({ error: `No response${blockReason ? ` (blocked: ${blockReason})` : "."}` }),
+        body: JSON.stringify({ error: "Empty response from Gemini." }),
       };
-    }
-
-    const text = candidate.content?.parts?.[0]?.text;
-    if (!text) {
-      return { statusCode: 502, headers: CORS, body: JSON.stringify({ error: "Empty response from Gemini." }) };
     }
 
     return {
@@ -122,11 +134,14 @@ Finances:\n${JSON.stringify(sanitized, null, 2)}`;
       body: JSON.stringify({ advice: text }),
     };
   } catch (err) {
-    console.error("Advisor function error:", err);
+    console.error("Gemini SDK Error:", err);
+
     return {
       statusCode: 502,
       headers: CORS,
-      body: JSON.stringify({ error: "Network error reaching Gemini." }),
+      body: JSON.stringify({
+        error: err.message || "Gemini failed",
+      }),
     };
   }
 };

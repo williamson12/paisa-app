@@ -9,7 +9,7 @@
 export async function fetchAdvisorAdvice(payload) {
   let res;
   try {
-    res = await fetch("/api/advisorV2", {
+    res = await fetch("/api/advisorV3", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
