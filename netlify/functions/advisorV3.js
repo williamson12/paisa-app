@@ -113,12 +113,25 @@ ${JSON.stringify(sanitized, null, 2)}`;
     const genAI = new GoogleGenerativeAI(apiKey);
 
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+      model: "gemini-1.0-pro",
     });
 
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const text = response.text();
+    let text = null;
+    let retries = 2;
+
+    while (retries >= 0) {
+      try {
+        const result = await model.generateContent(prompt);
+        const response = await result.response;
+        text = response.text();
+        if (text) break;
+      } catch (err) {
+        if (retries === 0) throw err;
+        retries--;
+        // Wait 1 second before retrying
+        await new Promise((res) => setTimeout(res, 1000));
+      }
+    }
 
     if (!text) {
       return {
@@ -140,7 +153,7 @@ ${JSON.stringify(sanitized, null, 2)}`;
       statusCode: 502,
       headers: CORS,
       body: JSON.stringify({
-        error: err.message || "Gemini failed",
+        error: "Our AI advisor is currently busy. Please try again in a moment.",
       }),
     };
   }
