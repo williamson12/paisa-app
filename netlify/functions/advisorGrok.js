@@ -1,8 +1,6 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
-
 /**
- * Netlify Function: /api/advisor
- * Secure Gemini proxy (server-side)
+ * Netlify Function: /api/advisorGrok
+ * Secure Grok (xAI) proxy (server-side)
  */
 export const handler = async (event) => {
   const CORS = {
@@ -25,13 +23,13 @@ export const handler = async (event) => {
     };
   }
 
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROK_API_KEY;
   if (!apiKey) {
     return {
       statusCode: 500,
       headers: CORS,
       body: JSON.stringify({
-        error: "Server misconfiguration: GEMINI_API_KEY not set.",
+        error: "Server misconfiguration: GROK_API_KEY not set.",
       }),
     };
   }
@@ -109,35 +107,49 @@ Finances:
 ${JSON.stringify(sanitized, null, 2)}`;
 
   try {
-    // ✅ Gemini SDK usage (FIXED PART)
-    const genAI = new GoogleGenerativeAI(apiKey);
-
-    const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
+    // ✅ Grok API Call
+    const response = await fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "grok-beta",
+        messages: [
+          {
+            role: "system",
+            content: "You are a highly precise Indian personal finance advisor.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        temperature: 0.7,
+      }),
     });
 
-    let text = null;
-    let retries = 2;
-
-    while (retries >= 0) {
-      try {
-        const result = await model.generateContent(prompt);
-        const response = await result.response;
-        text = response.text();
-        if (text) break;
-      } catch (err) {
-        if (retries === 0) throw err;
-        retries--;
-        // Wait 1 second before retrying
-        await new Promise((res) => setTimeout(res, 1000));
-      }
+    if (!response.ok) {
+      const errText = await response.text();
+      return {
+        statusCode: response.status,
+        headers: CORS,
+        body: JSON.stringify({
+          error: `Grok API Error: ${errText}`,
+        }),
+      };
     }
+
+    const data = await response.json();
+
+    const text = data?.choices?.[0]?.message?.content;
 
     if (!text) {
       return {
         statusCode: 502,
         headers: CORS,
-        body: JSON.stringify({ error: "Empty response from Gemini." }),
+        body: JSON.stringify({ error: "Empty response from Grok." }),
       };
     }
 
@@ -146,14 +158,15 @@ ${JSON.stringify(sanitized, null, 2)}`;
       headers: { ...CORS, "Content-Type": "application/json" },
       body: JSON.stringify({ advice: text }),
     };
+
   } catch (err) {
-    console.error("Gemini SDK Error:", err);
+    console.error("Grok Server Error:", err);
 
     return {
       statusCode: 502,
       headers: CORS,
       body: JSON.stringify({
-        error: "Our AI advisor is currently busy. Please try again in a moment.",
+        error: `Grok Error: ${err.message}`,
       }),
     };
   }
