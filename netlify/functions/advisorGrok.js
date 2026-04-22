@@ -115,7 +115,7 @@ ${JSON.stringify(sanitized, null, 2)}`;
         "Authorization": `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model: "grok-beta",
+        model: "grok-4.20-reasoning",
         messages: [
           {
             role: "system",
