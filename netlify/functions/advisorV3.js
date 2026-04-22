@@ -153,7 +153,7 @@ ${JSON.stringify(sanitized, null, 2)}`;
       statusCode: 502,
       headers: CORS,
       body: JSON.stringify({
-        error: "Our AI advisor is currently busy. Please try again in a moment.",
+        error: `Gemini Error: ${err.message}`,
       }),
     };
   }
