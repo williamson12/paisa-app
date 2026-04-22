@@ -3,6 +3,7 @@ import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence } fro
 import {
   getAuth,
   GoogleAuthProvider,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signOut,
@@ -31,6 +32,6 @@ enableIndexedDbPersistence(db).catch(() => {});
 export {
   db, auth, provider,
   doc, setDoc, onSnapshot,
-  signInWithRedirect, getRedirectResult,
+  signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut, onAuthStateChanged,
 };
