@@ -17,8 +17,6 @@ const REDIRECT_FALLBACK_CODES = new Set([
   "auth/operation-not-supported-in-this-environment",
 ]);
 
-const REDIRECT_STORAGE_KEY = "paisa_google_redirect_pending";
-
 const authErrorMessages = {
   "auth/popup-closed-by-user": "Sign-in cancelled. Please try again.",
   "auth/popup-blocked": "Popup blocked. Opening Google sign-in in this tab instead.",
@@ -27,30 +25,6 @@ const authErrorMessages = {
   "auth/unauthorized-domain": "This domain is not allowed in Firebase Auth. Add it in Firebase Console > Authentication > Settings > Authorized domains.",
   "auth/operation-not-supported-in-this-environment": "This browser cannot open a popup. Opening Google sign-in in this tab instead.",
 };
-
-function markRedirectStarted() {
-  try {
-    sessionStorage.setItem(REDIRECT_STORAGE_KEY, "1");
-  } catch {
-    // Some mobile privacy modes can block storage. Firebase persistence still handles the auth session.
-  }
-}
-
-function clearRedirectStarted() {
-  try {
-    sessionStorage.removeItem(REDIRECT_STORAGE_KEY);
-  } catch {
-    // Ignore storage cleanup failures.
-  }
-}
-
-function wasRedirectStarted() {
-  try {
-    return sessionStorage.getItem(REDIRECT_STORAGE_KEY) === "1";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Manages the full Firebase auth lifecycle:
@@ -66,14 +40,8 @@ export function useAuth() {
   useEffect(() => {
     ensureAuthPersistence()
       .then(() => getRedirectResult(auth))
-      .then((result) => {
-        if (result?.user) {
-          clearRedirectStarted();
-        }
-      })
       .catch((err) => {
         console.error("Redirect result error:", err);
-        clearRedirectStarted();
         setError(authErrorMessages[err.code] || "Google sign-in could not be completed. Please try again.");
       });
   }, []);
@@ -81,17 +49,11 @@ export function useAuth() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) {
-        clearRedirectStarted();
         setUser(u);
         setAuthState("signed-in");
       } else {
         setUser(null);
         setAuthState("signed-out");
-
-        if (wasRedirectStarted()) {
-          clearRedirectStarted();
-          setError("Google sign-in returned without a Firebase session. Add this Netlify domain in Firebase authorized domains and keep the /__/auth proxy deployed.");
-        }
       }
     });
 
@@ -105,7 +67,6 @@ export function useAuth() {
       await ensureAuthPersistence();
 
       if (isMobile()) {
-        markRedirectStarted();
         await signInWithRedirect(auth, provider);
         return;
       }
@@ -114,7 +75,6 @@ export function useAuth() {
         await signInWithPopup(auth, provider);
       } catch (err) {
         if (REDIRECT_FALLBACK_CODES.has(err.code)) {
-          markRedirectStarted();
           await signInWithRedirect(auth, provider);
           return;
         }
@@ -124,7 +84,6 @@ export function useAuth() {
     } catch (err) {
       console.error("Sign-in error:", err);
 
-      clearRedirectStarted();
       setError(authErrorMessages[err.code] || "Sign-in failed. Please try again.");
     }
   }, []);
