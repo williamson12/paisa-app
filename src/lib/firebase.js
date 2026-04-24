@@ -44,6 +44,7 @@ ensureAuthPersistence().catch(console.error);
 const provider = new GoogleAuthProvider();
 provider.addScope("profile");
 provider.addScope("email");
+provider.setCustomParameters({ prompt: "select_account" });
 
 // Enable offline persistence (best-effort — fails silently in non-supported envs)
 enableIndexedDbPersistence(db).catch(() => {});

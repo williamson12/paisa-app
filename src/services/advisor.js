@@ -9,7 +9,7 @@
 export async function fetchAdvisorAdvice(payload) {
   let res;
   try {
-    res = await fetch("/api/advisorGrok", {
+    res = await fetch("/api/advisor", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -23,7 +23,9 @@ export async function fetchAdvisorAdvice(payload) {
 
   if (!res.ok) {
     const msg = body?.error || res.statusText;
+    if (res.status === 404) throw new Error("Advisor API route was not found. Deploy the Netlify function or run npm run dev:full locally.");
     if (res.status === 429) throw new Error("Rate limit hit. Wait a moment and try again.");
+    if (res.status === 503) throw new Error(msg || "Advisor service is not configured.");
     if (res.status >= 500) throw new Error(`Server error: ${msg}`);
     throw new Error(msg || `Error ${res.status}`);
   }
