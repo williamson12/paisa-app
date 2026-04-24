@@ -29,11 +29,27 @@ const authErrorMessages = {
 };
 
 function markRedirectStarted() {
-  sessionStorage.setItem(REDIRECT_STORAGE_KEY, "1");
+  try {
+    sessionStorage.setItem(REDIRECT_STORAGE_KEY, "1");
+  } catch {
+    // Some mobile privacy modes can block storage. Firebase persistence still handles the auth session.
+  }
 }
 
 function clearRedirectStarted() {
-  sessionStorage.removeItem(REDIRECT_STORAGE_KEY);
+  try {
+    sessionStorage.removeItem(REDIRECT_STORAGE_KEY);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
+
+function wasRedirectStarted() {
+  try {
+    return sessionStorage.getItem(REDIRECT_STORAGE_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -65,11 +81,17 @@ export function useAuth() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       if (u) {
+        clearRedirectStarted();
         setUser(u);
         setAuthState("signed-in");
       } else {
         setUser(null);
         setAuthState("signed-out");
+
+        if (wasRedirectStarted()) {
+          clearRedirectStarted();
+          setError("Google sign-in returned without a Firebase session. Add this Netlify domain in Firebase authorized domains and keep the /__/auth proxy deployed.");
+        }
       }
     });
 

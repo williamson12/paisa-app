@@ -7,6 +7,12 @@
   node_bundler = "esbuild"
 
 [[redirects]]
+  from = "/__/auth/*"
+  to = "https://paisa-tracker-5fab1.firebaseapp.com/__/auth/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/:splat"
   status = 200
