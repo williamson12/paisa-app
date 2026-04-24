@@ -53,6 +53,21 @@ export {
   db, auth, provider,
   doc, setDoc, onSnapshot, getDoc,
   signInWithPopup, signInWithRedirect, getRedirectResult,
-  signOut, onAuthStateChanged,
+  signOut, onAuthStateChanged, signInWithGoogle, isMobile,
   browserLocalPersistence, setPersistence, ensureAuthPersistence,
 };
+
+// Add this function
+function isMobile() {
+  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+}
+
+async function signInWithGoogle() {
+  await ensureAuthPersistence();
+  if (isMobile()) {
+    await signInWithRedirect(auth, provider);
+  } else {
+    return await signInWithPopup(auth, provider);
+  }
+}
+

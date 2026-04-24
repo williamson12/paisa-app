@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from "react";
+import { lazy, Suspense, useState, useEffect } from "react";
 import { AnimatePresence } from "framer-motion";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { BottomNav }     from "./components/BottomNav.jsx";
@@ -11,7 +11,6 @@ import { useToast }      from "./hooks/useToast.js";
 import { useFinancials } from "./hooks/useFinancials.js";
 import { fmt, fmtS }     from "./utils/formatters.js";
 
-// Lazy-load heavy pages for code splitting
 const HomePage    = lazy(() => import("./pages/HomePage.jsx").then(m => ({ default: m.HomePage })));
 const AddPage     = lazy(() => import("./pages/AddPage.jsx").then(m => ({ default: m.AddPage })));
 const HistoryPage = lazy(() => import("./pages/HistoryPage.jsx").then(m => ({ default: m.HistoryPage })));
@@ -29,7 +28,16 @@ export default function App() {
 /* ── Auth Gate: handles splash → login → app ── */
 function AuthGate() {
   const { authState, user, error, signIn, signOutUser } = useAuth();
-  const [signInLoading, setSignInLoading] = useState(false);
+  const [signInLoading,   setSignInLoading]   = useState(false);
+  const [redirectChecked, setRedirectChecked] = useState(false); // ✅ prevents login flash on mobile
+
+  // ✅ Give useAuth's internal getRedirectResult time to settle before
+  //    rendering the login page — avoids a flash of login screen on mobile
+  //    after Google redirects back to the app.
+  useEffect(() => {
+    const t = setTimeout(() => setRedirectChecked(true), 500);
+    return () => clearTimeout(t);
+  }, []);
 
   const handleSignIn = async () => {
     setSignInLoading(true);
@@ -37,7 +45,8 @@ function AuthGate() {
     setSignInLoading(false);
   };
 
-  if (authState === "loading") {
+  // ✅ Hold on splash until both auth state resolves AND redirect is settled
+  if (authState === "loading" || !redirectChecked) {
     return <Splash />;
   }
 
@@ -85,18 +94,15 @@ function MainApp({ user, onSignOut }) {
   return (
     <div className="app-root">
       <div className="app-shell">
-        {/* Page content with lazy loading + transition */}
         <Suspense fallback={<Splash subtitle="Loading…" />}>
           <AnimatePresence mode="wait">
             <div key={tab}>{pages[tab]}</div>
           </AnimatePresence>
         </Suspense>
 
-        {/* Bottom Navigation */}
         <BottomNav tab={tab} setTab={setTab} />
       </div>
 
-      {/* Modals */}
       <AnimatePresence>
         {showSetup && (
           <SetupModal
@@ -122,7 +128,6 @@ function MainApp({ user, onSignOut }) {
         )}
       </AnimatePresence>
 
-      {/* Toast Notifications */}
       <Toast toast={toast} />
     </div>
   );
