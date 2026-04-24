@@ -1,5 +1,5 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot, enableIndexedDbPersistence } from "firebase/firestore";
+import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableIndexedDbPersistence } from "firebase/firestore";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -8,6 +8,8 @@ import {
   getRedirectResult,
   signOut,
   onAuthStateChanged,
+  browserLocalPersistence,
+  setPersistence,
 } from "firebase/auth";
 
 const firebaseConfig = {
@@ -22,6 +24,23 @@ const firebaseConfig = {
 const app      = initializeApp(firebaseConfig);
 const db       = getFirestore(app);
 const auth     = getAuth(app);
+
+let authPersistencePromise = null;
+
+function ensureAuthPersistence() {
+  if (!authPersistencePromise) {
+    authPersistencePromise = setPersistence(auth, browserLocalPersistence).catch((err) => {
+      authPersistencePromise = null;
+      throw err;
+    });
+  }
+
+  return authPersistencePromise;
+}
+
+// Ensure session survives page reloads (required for signInWithRedirect on mobile).
+ensureAuthPersistence().catch(console.error);
+
 const provider = new GoogleAuthProvider();
 provider.addScope("profile");
 provider.addScope("email");
@@ -31,7 +50,8 @@ enableIndexedDbPersistence(db).catch(() => {});
 
 export {
   db, auth, provider,
-  doc, setDoc, onSnapshot,
+  doc, setDoc, onSnapshot, getDoc,
   signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut, onAuthStateChanged,
+  browserLocalPersistence, setPersistence, ensureAuthPersistence,
 };

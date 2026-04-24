@@ -56,7 +56,7 @@ function AuthGate() {
 
 /* ── Main App: data + layout ── */
 function MainApp({ user, onSignOut }) {
-  const { data, loaded, needsSetup, setNeedsSetup, save } = useUserData(user.uid);
+  const { data, loaded, needsSetup, setNeedsSetup, save, onboardingChecked, markOnboardingComplete } = useUserData(user.uid);
   const { toast, showToast } = useToast();
   const financials = useFinancials(data);
 
@@ -64,15 +64,15 @@ function MainApp({ user, onSignOut }) {
   const [setup,   setSetup]   = useState(false);
   const [profile, setProfile] = useState(false);
 
-  // Open setup automatically when new user has no data
-  if (!setup && needsSetup) {
-    setNeedsSetup(false);
-    setSetup(true);
-  }
-
-  if (!loaded) {
+  if (!loaded || !onboardingChecked) {
     return <Splash subtitle="Syncing your data…" />;
   }
+
+  const showSetup = setup || needsSetup;
+  const closeSetup = () => {
+    setNeedsSetup(false);
+    setSetup(false);
+  };
 
   const pages = {
     home:    <HomePage    data={data} financials={financials} fmt={fmt} fmtS={fmtS} user={user} openSetup={() => setSetup(true)} openProfile={() => setProfile(true)} />,
@@ -98,13 +98,14 @@ function MainApp({ user, onSignOut }) {
 
       {/* Modals */}
       <AnimatePresence>
-        {setup && (
+        {showSetup && (
           <SetupModal
             key="setup"
             data={data}
             save={save}
-            close={() => setSetup(false)}
+            close={closeSetup}
             showToast={showToast}
+            onComplete={markOnboardingComplete}
           />
         )}
         {profile && (

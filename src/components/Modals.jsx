@@ -3,19 +3,30 @@ import { motion, AnimatePresence } from "framer-motion";
 import { validateSetup } from "../utils/formatters";
 
 /** Setup / Settings modal — income & budget config + month reset */
-export function SetupModal({ data, save, close, showToast }) {
+export function SetupModal({ data, save, close, showToast, onComplete }) {
   const [inc, setInc] = useState(String(data.monthlyIncome || ""));
   const [bud, setBud] = useState(String(data.monthlyBudget || ""));
   const [busy, setBusy] = useState(false);
+
 
   const submit = async () => {
     const err = validateSetup({ income: inc });
     if (err) { showToast(err, "err"); return; }
     setBusy(true);
-    await save({ ...data, monthlyIncome: parseFloat(inc), monthlyBudget: parseFloat(bud) || 0 });
-    setBusy(false);
-    showToast("Saved ✓");
-    close();
+    const income = parseFloat(inc);
+    const savings = parseFloat(bud) || 0;
+
+    try {
+      await save({ ...data, monthlyIncome: income, monthlyBudget: savings });
+      if (onComplete) await onComplete({ income, savings });
+      showToast("Saved ✓");
+      close();
+    } catch (err) {
+      console.error("Setup save error:", err);
+      showToast("Could not save setup. Please try again.", "err");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const reset = async () => {

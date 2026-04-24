@@ -20,8 +20,18 @@ export const fmtS = (n) => {
 /** Today's date as YYYY-MM-DD */
 export const todayStr = () => new Date().toISOString().split("T")[0];
 
-/** Detect mobile viewport */
-export const isMobile = () => window.innerWidth < 768;
+/** Detect mobile browsers and touch-first narrow devices. */
+export const isMobile = () => {
+  if (typeof window === "undefined" || typeof navigator === "undefined") {
+    return false;
+  }
+
+  const ua = navigator.userAgent || "";
+  const mobileUa = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|Silk|Kindle/i.test(ua);
+  const coarsePointer = window.matchMedia?.("(pointer: coarse)")?.matches ?? false;
+
+  return mobileUa || (coarsePointer && window.innerWidth < 900);
+};
 
 /** Clamp a value between min and max */
 export const clamp = (val, min, max) => Math.min(Math.max(val, min), max);

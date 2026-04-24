@@ -6,7 +6,7 @@ service cloud.firestore {
     // ── User data: only the authenticated owner can read/write ──────────────
     match /appData/{userId} {
 
-      allow read, write: if
+      allow read, delete: if
         // Must be signed in
         request.auth != null &&
         // Must be the document owner
@@ -17,6 +17,16 @@ service cloud.firestore {
         request.auth != null &&
         request.auth.uid == userId &&
         isValidAppData(request.resource.data);
+    }
+
+    // Onboarding/profile flags: only the authenticated owner can read/write.
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow create, update: if
+        request.auth != null &&
+        request.auth.uid == userId &&
+        isValidUserProfile(request.resource.data);
     }
 
     // ── Deny everything else by default ─────────────────────────────────────
@@ -45,4 +55,13 @@ function isValidAppData(data) {
 
     // Transaction list size guard (max 5000 entries)
     data.transactions.size() <= 5000;
+}
+
+function isValidUserProfile(data) {
+  return
+    data.keys().hasOnly(['income', 'savings', 'onboardingComplete', 'updatedAt']) &&
+    (!('income' in data) || (data.income is number && data.income >= 0 && data.income <= 100000000)) &&
+    (!('savings' in data) || (data.savings is number && data.savings >= 0 && data.savings <= 100000000)) &&
+    (!('onboardingComplete' in data) || data.onboardingComplete is bool) &&
+    (!('updatedAt' in data) || data.updatedAt is string);
 }

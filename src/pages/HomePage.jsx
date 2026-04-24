@@ -3,7 +3,7 @@ import { PageMotion, Ring, TransactionRow } from "../components/UI.jsx";
 import { safe, todayStr } from "../utils/formatters.js";
 
 export function HomePage({ data, financials, fmt, fmtS, openSetup, openProfile, user }) {
-  const { txns, spent, balance, budget, bPct, catData, sRate, savings, healthScore } = financials;
+  const { txns, spent, balance, budget, bPct, catData, sRate, healthScore } = financials;
   const todayTxns = txns.filter(t => t.date === todayStr());
   const todayAmt  = safe(todayTxns.filter(t => t.type === "expense").reduce((s, t) => s + (t.amount || 0), 0));
 
