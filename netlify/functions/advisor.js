@@ -47,7 +47,7 @@ function buildPrompt(payload) {
         .join("\n")
     : "- No category data available";
 
-  return `You are an experienced Chartered Accountant in India. Give practical personal-finance advice for a consumer finance tracker.
+  return `You are an experienced Chartered Accountant in India. Provide practical personal-finance advice for a consumer finance tracker app.
 
 Client summary for this month:
 - Monthly income: ${formatInr(monthlyIncome)}
@@ -58,13 +58,28 @@ Client summary for this month:
 - Top spending categories:
 ${categoryLines}
 
-Return a concise CA report with:
-1. Overall financial health in 2 short sentences.
-2. Top red flags, if any.
-3. Three specific action items for India, mentioning relevant instruments such as SIP, PPF, NPS, ELSS, FD, emergency fund, or debt prepayment only when suitable.
-4. One quick win for this week.
+Format your response using clean Markdown with these exact sections:
 
-Keep it under 280 words. Do not invent tax deductions. Use simple language and INR amounts where helpful.`;
+## Financial Health
+2 sentences on overall status.
+
+## Red Flags
+Bullet points for any concerns. If none, write "None this month."
+
+## Action Items
+1. First action (mention specific instrument if relevant: SIP, PPF, NPS, ELSS, FD, emergency fund)
+2. Second action
+3. Third action
+
+## Quick Win This Week
+One specific, actionable tip.
+
+Rules:
+- Use **bold** for key amounts and instrument names.
+- Keep total under 280 words.
+- Use INR amounts where helpful.
+- Do not invent tax deductions or make up figures.
+- Write in simple, direct language for a mobile user.`;
 }
 
 export const handler = async (event) => {

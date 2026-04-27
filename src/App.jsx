@@ -1,4 +1,5 @@
-import { lazy, Suspense, useState, useEffect } from "react";
+import { lazy, Suspense, useState } from "react";
+import { isMobile } from "./lib/firebase";
 import { AnimatePresence } from "framer-motion";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { BottomNav }     from "./components/BottomNav.jsx";
@@ -25,45 +26,29 @@ export default function App() {
   );
 }
 
-/* ── Auth Gate: handles splash → login → app ── */
 function AuthGate() {
   const { authState, user, error, signIn, signOutUser } = useAuth();
-  const [signInLoading,   setSignInLoading]   = useState(false);
-  const [redirectChecked, setRedirectChecked] = useState(false); // ✅ prevents login flash on mobile
-
-  // ✅ Give useAuth's internal getRedirectResult time to settle before
-  //    rendering the login page — avoids a flash of login screen on mobile
-  //    after Google redirects back to the app.
-  useEffect(() => {
-    const t = setTimeout(() => setRedirectChecked(true), 500);
-    return () => clearTimeout(t);
-  }, []);
+  const [signInLoading, setSignInLoading] = useState(false);
 
   const handleSignIn = async () => {
     setSignInLoading(true);
     await signIn();
-    setSignInLoading(false);
+    // On mobile: signIn() calls signInWithRedirect which navigates away —
+    // the page reloads, this line is never reached, and the Splash screen
+    // is shown while authState resolves from getRedirectResult. Correct.
+    // On desktop: popup resolves synchronously, so we reset loading here.
+    if (!isMobile()) setSignInLoading(false);
   };
 
-  // ✅ Hold on splash until both auth state resolves AND redirect is settled
-  if (authState === "loading" || !redirectChecked) {
-    return <Splash />;
-  }
+  if (authState === "loading") return <Splash />;
 
-  if (authState === "signed-out") {
-    return (
-      <LoginPage
-        onSignIn={handleSignIn}
-        error={error}
-        loading={signInLoading}
-      />
-    );
-  }
+  if (authState === "signed-out") return (
+    <LoginPage onSignIn={handleSignIn} error={error} loading={signInLoading} />
+  );
 
   return <MainApp user={user} onSignOut={signOutUser} />;
 }
 
-/* ── Main App: data + layout ── */
 function MainApp({ user, onSignOut }) {
   const { data, loaded, needsSetup, setNeedsSetup, save, onboardingChecked, markOnboardingComplete } = useUserData(user.uid);
   const { toast, showToast } = useToast();

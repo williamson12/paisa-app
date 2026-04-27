@@ -1,5 +1,12 @@
 import { initializeApp } from "firebase/app";
-import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableIndexedDbPersistence } from "firebase/firestore";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  onSnapshot,
+  getDoc,
+  enableIndexedDbPersistence,
+} from "firebase/firestore";
 import {
   getAuth,
   GoogleAuthProvider,
@@ -21,10 +28,11 @@ const firebaseConfig = {
   appId:             import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-const app      = initializeApp(firebaseConfig);
-const db       = getFirestore(app);
-const auth     = getAuth(app);
+const app  = initializeApp(firebaseConfig);
+const db   = getFirestore(app);
+const auth = getAuth(app);
 
+// ─── Auth Persistence ──────────────────────────────────────────────────────
 let authPersistencePromise = null;
 
 function ensureAuthPersistence() {
@@ -34,40 +42,40 @@ function ensureAuthPersistence() {
       throw err;
     });
   }
-
   return authPersistencePromise;
 }
 
-// Ensure session survives page reloads (required for signInWithRedirect on mobile).
+// Kick off persistence immediately so it's ready before any sign-in call.
 ensureAuthPersistence().catch(console.error);
 
+// ─── Google Auth Provider ──────────────────────────────────────────────────
 const provider = new GoogleAuthProvider();
 provider.addScope("profile");
 provider.addScope("email");
 provider.setCustomParameters({ prompt: "select_account" });
 
-// Enable offline persistence (best-effort — fails silently in non-supported envs)
+// ─── Device Detection ──────────────────────────────────────────────────────
+/**
+ * Returns true for any mobile/tablet device.
+ * Both iOS and Android use signInWithRedirect — popup is unreliable on mobile:
+ *   • iOS Safari blocks third-party cookies needed for popup auth (ITP).
+ *   • Android Chrome often blocks popups.
+ */
+function isMobile() {
+  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(
+    navigator.userAgent
+  );
+}
+
+// ─── Offline Persistence (Firestore) ──────────────────────────────────────
+// Best-effort — fails silently in unsupported environments (e.g. Safari private).
 enableIndexedDbPersistence(db).catch(() => {});
 
+// ─── Exports ───────────────────────────────────────────────────────────────
 export {
-  db, auth, provider,
+  db, auth, provider, isMobile,
   doc, setDoc, onSnapshot, getDoc,
   signInWithPopup, signInWithRedirect, getRedirectResult,
-  signOut, onAuthStateChanged, signInWithGoogle, isMobile,
+  signOut, onAuthStateChanged,
   browserLocalPersistence, setPersistence, ensureAuthPersistence,
 };
-
-// Add this function
-function isMobile() {
-  return /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
-}
-
-async function signInWithGoogle() {
-  await ensureAuthPersistence();
-  if (isMobile()) {
-    await signInWithRedirect(auth, provider);
-  } else {
-    return await signInWithPopup(auth, provider);
-  }
-}
-

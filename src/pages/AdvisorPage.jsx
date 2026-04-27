@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { PageMotion } from "../components/UI.jsx";
 import { fetchAdvisorAdvice } from "../services/advisor.js";
 import { safe } from "../utils/formatters.js";
+import { parseMarkdown } from "../utils/parseMarkdown.jsx";
 
 export function AdvisorPage({ data, financials, fmt }) {
   const { spent, balance, catData, savings, sRate } = financials;
@@ -124,13 +125,17 @@ export function AdvisorPage({ data, financials, fmt }) {
               className="gc"
               style={{ borderColor: "rgba(200,250,100,0.2)", background: "linear-gradient(135deg,rgba(200,250,100,0.03),transparent)", marginBottom: 14 }}
             >
-              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+              {/* Header */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 18, paddingBottom: 14, borderBottom: "1px solid rgba(255,255,255,0.07)" }}>
                 <span style={{ width: 8, height: 8, borderRadius: "50%", background: "#C8FA64", display: "inline-block", boxShadow: "0 0 8px #C8FA64" }} />
                 <span style={{ fontSize: 11, fontWeight: 700, color: "#C8FA64", letterSpacing: "0.08em" }}>
-                  AI CA ANALYSIS · {new Date().toLocaleDateString("en-IN")}
+                  AI CA ANALYSIS &middot; {new Date().toLocaleDateString("en-IN")}
                 </span>
               </div>
-              <p style={{ fontSize: 14, lineHeight: 1.85, color: "#d4d4d8", whiteSpace: "pre-line" }}>{advice}</p>
+              {/* Rendered Markdown */}
+              <div style={{ fontSize: 13, lineHeight: 1.8, color: "#a1a1aa" }}>
+                {parseMarkdown(advice)}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
