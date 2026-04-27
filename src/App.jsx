@@ -1,5 +1,4 @@
 import { lazy, Suspense, useState } from "react";
-import { isMobile } from "./lib/firebase";
 import { AnimatePresence } from "framer-motion";
 import { ErrorBoundary } from "./components/ErrorBoundary.jsx";
 import { BottomNav }     from "./components/BottomNav.jsx";
@@ -31,49 +30,100 @@ function AuthGate() {
   const [signInLoading, setSignInLoading] = useState(false);
 
   const handleSignIn = async () => {
-    setSignInLoading(true);
-    await signIn();
-    // On mobile: signIn() calls signInWithRedirect which navigates away —
-    // the page reloads, this line is never reached, and the Splash screen
-    // is shown while authState resolves from getRedirectResult. Correct.
-    // On desktop: popup resolves synchronously, so we reset loading here.
-    if (!isMobile()) setSignInLoading(false);
+    try {
+      setSignInLoading(true);
+      await signIn();
+      // If redirect happens → app reloads → no need to reset loading
+      setSignInLoading(false);
+    } catch (err) {
+      console.error("[UI] signIn error:", err);
+      setSignInLoading(false);
+    }
   };
 
-  if (authState === "loading") return <Splash />;
+  // 🔥 Prevent premature redirects (CRITICAL)
+  if (authState === "loading") {
+    return <Splash />;
+  }
 
-  if (authState === "signed-out") return (
-    <LoginPage onSignIn={handleSignIn} error={error} loading={signInLoading} />
-  );
+  if (authState === "signed-out") {
+    return (
+      <LoginPage
+        onSignIn={handleSignIn}
+        error={error}
+        loading={signInLoading}
+      />
+    );
+  }
 
   return <MainApp user={user} onSignOut={signOutUser} />;
 }
 
 function MainApp({ user, onSignOut }) {
-  const { data, loaded, needsSetup, setNeedsSetup, save, onboardingChecked, markOnboardingComplete } = useUserData(user.uid);
+  const {
+    data,
+    loaded,
+    needsSetup,
+    setNeedsSetup,
+    save,
+    onboardingChecked,
+    markOnboardingComplete,
+  } = useUserData(user.uid);
+
   const { toast, showToast } = useToast();
   const financials = useFinancials(data);
 
-  const [tab,     setTab]     = useState("home");
-  const [setup,   setSetup]   = useState(false);
+  const [tab, setTab] = useState("home");
+  const [setup, setSetup] = useState(false);
   const [profile, setProfile] = useState(false);
 
+  // 🔥 Block UI until user data is fully ready
   if (!loaded || !onboardingChecked) {
     return <Splash subtitle="Syncing your data…" />;
   }
 
   const showSetup = setup || needsSetup;
+
   const closeSetup = () => {
     setNeedsSetup(false);
     setSetup(false);
   };
 
   const pages = {
-    home:    <HomePage    data={data} financials={financials} fmt={fmt} fmtS={fmtS} user={user} openSetup={() => setSetup(true)} openProfile={() => setProfile(true)} />,
-    add:     <AddPage     data={data} save={save} showToast={showToast} />,
-    history: <HistoryPage data={data} save={save} showToast={showToast} fmt={fmt} />,
-    charts:  <ChartsPage  financials={financials} fmt={fmt} fmtS={fmtS} />,
-    advisor: <AdvisorPage data={data} financials={financials} fmt={fmt} />,
+    home: (
+      <HomePage
+        data={data}
+        financials={financials}
+        fmt={fmt}
+        fmtS={fmtS}
+        user={user}
+        openSetup={() => setSetup(true)}
+        openProfile={() => setProfile(true)}
+      />
+    ),
+    add: <AddPage data={data} save={save} showToast={showToast} />,
+    history: (
+      <HistoryPage
+        data={data}
+        save={save}
+        showToast={showToast}
+        fmt={fmt}
+      />
+    ),
+    charts: (
+      <ChartsPage
+        financials={financials}
+        fmt={fmt}
+        fmtS={fmtS}
+      />
+    ),
+    advisor: (
+      <AdvisorPage
+        data={data}
+        financials={financials}
+        fmt={fmt}
+      />
+    ),
   };
 
   return (
@@ -99,6 +149,7 @@ function MainApp({ user, onSignOut }) {
             onComplete={markOnboardingComplete}
           />
         )}
+
         {profile && (
           <ProfileModal
             key="profile"

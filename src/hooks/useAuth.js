@@ -1,129 +1,158 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
   auth,
   provider,
-  isMobile,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   signOut,
   onAuthStateChanged,
-  ensureAuthPersistence,
 } from "../lib/firebase";
 
-const REDIRECT_FALLBACK_CODES = new Set([
+// ─────────────────────────────────────────────────────────────────────────────
+// WHY THIS WORKS — the exact root cause of every previous failure:
+//
+// Firebase's getRedirectResult() does TWO things, not one:
+//   1. Exchanges the OAuth token from a pending redirect (if any)
+//   2. WAITS for Firebase's full auth initialization to complete
+//      (including session restoration from localStorage/IndexedDB)
+//
+// onAuthStateChanged fires as soon as it is registered. If registered
+// BEFORE getRedirectResult resolves, Firebase may not have finished
+// restoring the persisted session yet — so it fires null, the UI shows
+// the login page, and the user is bounced even though they are signed in.
+//
+// THE FIX: always await getRedirectResult() before subscribing to
+// onAuthStateChanged, on ALL browsers, without device detection.
+// After getRedirectResult resolves, auth.currentUser is guaranteed to be
+// correct and onAuthStateChanged fires exactly once with the right value.
+//
+// DOUBLE-INVOKE GUARD: getRedirectResult consumes the redirect token on
+// first call. If called twice (e.g. React component remount), the second
+// call returns null, making the user appear logged out. The module-level
+// promise means it truly runs only once per page load regardless of
+// how many times the component mounts.
+// ─────────────────────────────────────────────────────────────────────────────
+
+let _redirectResultPromise = null;
+
+function getRedirectResultOnce() {
+  if (!_redirectResultPromise) {
+    console.debug("[auth] calling getRedirectResult (once per page load)");
+    _redirectResultPromise = getRedirectResult(auth)
+      .then((result) => {
+        console.debug("[auth] getRedirectResult resolved:", result?.user?.email ?? "no redirect user");
+        return result;
+      })
+      .catch((err) => {
+        console.error("[auth] getRedirectResult error:", err.code, err.message);
+        _redirectResultPromise = null; // allow retry on network failure
+        return null;
+      });
+  }
+  return _redirectResultPromise;
+}
+
+const ERROR_MESSAGES = {
+  "auth/popup-closed-by-user":    "Sign-in cancelled. Please try again.",
+  "auth/popup-blocked":           "Popup blocked — trying redirect…",
+  "auth/network-request-failed":  "Network error. Check your connection.",
+  "auth/cancelled-popup-request": "Sign-in cancelled. Please try again.",
+  "auth/unauthorized-domain":     "Domain not authorised in Firebase Console.",
+};
+
+const POPUP_FALLBACK_CODES = new Set([
   "auth/popup-blocked",
   "auth/cancelled-popup-request",
   "auth/operation-not-supported-in-this-environment",
 ]);
-
-const authErrorMessages = {
-  "auth/popup-closed-by-user":    "Sign-in cancelled. Please try again.",
-  "auth/popup-blocked":           "Popup blocked. Redirecting to Google sign-in…",
-  "auth/network-request-failed":  "Network error. Check your connection.",
-  "auth/cancelled-popup-request": "Sign-in cancelled. Please try again.",
-  "auth/unauthorized-domain":     "This domain is not authorised in Firebase Console.",
-  "auth/operation-not-supported-in-this-environment": "Redirecting to Google sign-in…",
-};
 
 export function useAuth() {
   const [authState, setAuthState] = useState("loading");
   const [user,      setUser]      = useState(null);
   const [error,     setError]     = useState("");
 
-  // Track whether getRedirectResult has finished so onAuthStateChanged
-  // doesn't prematurely flip the state to "signed-out" on mobile.
-  const redirectChecked = useRef(!isMobile()); // desktop: skip, mobile: wait
-
-  // ── Step 1: Process redirect result on EVERY mobile device ───────────────
-  // Both iOS and Android use signInWithRedirect, so we must always call
-  // getRedirectResult() on mobile — not just Android.
   useEffect(() => {
-    if (!isMobile()) return; // desktop uses popup — nothing to process
+    let alive  = true;
+    let unsub  = () => {};
 
-    let cancelled = false;
+    async function init() {
+      // STEP 1 — Always await getRedirectResult.
+      //   • Exchanges any pending OAuth redirect token with Google.
+      //   • Waits for Firebase's auth module to fully initialize
+      //     (session restored from localStorage, currentUser populated).
+      //   • Safe to call when no redirect happened — resolves null instantly.
+      //   • Module-level promise ensures it runs at most once per page load.
+      await getRedirectResultOnce();
 
-    ensureAuthPersistence()
-      .then(() => getRedirectResult(auth))
-      .then((result) => {
-        if (cancelled) return;
-        if (result?.user) {
-          setUser(result.user);
+      if (!alive) return;
+
+      // STEP 2 — Subscribe AFTER step 1 is done.
+      //   Firebase now has the correct auth state. onAuthStateChanged fires
+      //   immediately once with the definitive user (or null) and then on
+      //   every future change (sign-in, sign-out, token refresh).
+      console.debug("[auth] registering onAuthStateChanged listener");
+
+      unsub = onAuthStateChanged(auth, (u) => {
+        if (!alive) return;
+        console.debug("[auth] onAuthStateChanged →", u ? u.email : "null");
+        if (u) {
+          setUser(u);
           setAuthState("signed-in");
-        }
-      })
-      .catch((err) => {
-        if (cancelled) return;
-        console.error("Redirect result error:", err);
-        setError(authErrorMessages[err.code] || "Sign-in failed. Please try again.");
-      })
-      .finally(() => {
-        if (!cancelled) {
-          redirectChecked.current = true;
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, []);
-
-  // ── Step 2: Auth state listener — covers all platforms ───────────────────
-  // On mobile we defer to the redirect-result check above for the initial
-  // auth state so we don't flash "signed-out" before the redirect completes.
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
-      if (u) {
-        setUser(u);
-        setAuthState("signed-in");
-      } else {
-        // Only set signed-out once the redirect result has been processed.
-        // Without this guard, mobile users see a signed-out flash mid-redirect.
-        if (redirectChecked.current) {
+        } else {
           setUser(null);
           setAuthState("signed-out");
         }
-      }
+      });
+    }
+
+    init().catch((err) => {
+      console.error("[auth] init fatal:", err);
+      if (alive) setAuthState("signed-out"); // never leave user on splash
     });
-    return unsub;
+
+    return () => {
+      alive = false;
+      unsub();
+    };
   }, []);
 
-  // ── Sign-in ───────────────────────────────────────────────────────────────
+  // ── Sign in ───────────────────────────────────────────────────────────────
   const signIn = useCallback(async () => {
     setError("");
-
     try {
-      await ensureAuthPersistence();
-
-      if (isMobile()) {
-        // ALL mobile devices use redirect:
-        //   • iOS Safari: third-party cookie restrictions (ITP) break popup auth.
-        //   • Android:    redirect is more stable than popup in WebViews/Chrome.
-        await signInWithRedirect(auth, provider);
-        return; // page will reload — execution stops here
-      }
-
-      // Desktop: popup is fast and reliable
+      // Attempt popup first — resolves in-page on desktop, opens new tab on
+      // mobile Safari (which Firebase handles automatically).
       try {
+        console.debug("[auth] attempting signInWithPopup");
         await signInWithPopup(auth, provider);
-      } catch (err) {
-        if (REDIRECT_FALLBACK_CODES.has(err.code)) {
-          // Last-resort fallback for browsers that block popups even on desktop
+        // onAuthStateChanged fires automatically → authState becomes "signed-in"
+      } catch (popupErr) {
+        if (POPUP_FALLBACK_CODES.has(popupErr.code)) {
+          // Popup was blocked — fall back to redirect.
+          // Reset the guard so the next page load calls getRedirectResult fresh.
+          console.debug("[auth] popup blocked, falling back to signInWithRedirect");
+          _redirectResultPromise = null;
           await signInWithRedirect(auth, provider);
+          // Page navigates away here — nothing below runs.
           return;
         }
-        throw err;
+        throw popupErr;
       }
     } catch (err) {
-      console.error("Sign-in error:", err);
-      setError(authErrorMessages[err.code] || "Sign-in failed. Please try again.");
+      console.error("[auth] signIn error:", err.code, err.message);
+      setError(ERROR_MESSAGES[err.code] || "Sign-in failed. Please try again.");
     }
   }, []);
 
-  // ── Sign-out ──────────────────────────────────────────────────────────────
+  // ── Sign out ──────────────────────────────────────────────────────────────
   const signOutUser = useCallback(async () => {
     try {
+      console.debug("[auth] signing out");
       await signOut(auth);
+      // onAuthStateChanged fires → authState becomes "signed-out"
     } catch (err) {
-      console.error("Sign-out error:", err);
+      console.error("[auth] signOut error:", err);
     }
   }, []);
 
