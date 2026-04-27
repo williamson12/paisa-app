@@ -1,121 +1,98 @@
-import { db, doc, setDoc, getDoc, onSnapshot } from "../lib/firebase";
-import { STORAGE_KEY } from "../utils/constants";
+import { db, doc, setDoc, getDoc, onSnapshot, collection, query, orderBy, limit, deleteDoc } from "../lib/firebase";
 
 /**
- * Subscribe to the user's Firestore document.
- * Falls back to localStorage if Firestore times out or errors.
- *
- * @param {string} userId
- * @param {(data: object) => void} onData   Called with data when resolved
- * @param {() => void}             onSetup  Called when no data exists anywhere
- * @returns {() => void}                    Unsubscribe function
+ * Subscribe to the user's config document (income, budget).
  */
-export function subscribeToUserData(userId, onData, onSetup) {
-  const docRef = doc(db, "appData", userId);
-  let resolved = false;
-
-  const fallback = () => {
-    const local = localStorage.getItem(STORAGE_KEY);
-    if (local) {
-      try {
-        onData(JSON.parse(local));
-        return;
-      } catch {
-        localStorage.removeItem(STORAGE_KEY);
-      }
+export function subscribeToUserConfig(userId, onData, onSetup) {
+  const docRef = doc(db, "users", userId);
+  return onSnapshot(docRef, (snap) => {
+    if (snap.exists()) {
+      onData(snap.data());
+    } else {
+      onSetup();
     }
+  }, (err) => {
+    console.error("Firestore config subscription error:", err);
     onSetup();
-  };
+  });
+}
 
-  // 5-second Firestore timeout → graceful offline fallback
-  const timer = setTimeout(() => {
-    if (!resolved) {
-      console.warn("Firestore timeout — using local data.");
-      fallback();
-    }
-  }, 5000);
-
-  const unsub = onSnapshot(
-    docRef,
-    (snap) => {
-      resolved = true;
-      clearTimeout(timer);
-      if (snap.exists()) {
-        onData(snap.data());
-      } else {
-        const local = localStorage.getItem(STORAGE_KEY);
-        if (local) {
-          try {
-            const d = JSON.parse(local);
-            onData(d);
-            // Migrate local data to Firestore silently
-            setDoc(docRef, d).catch(console.error);
-          } catch { onSetup(); }
-        } else {
-          onSetup();
-        }
-      }
-    },
-    (err) => {
-      resolved = true;
-      clearTimeout(timer);
-      console.warn("Firestore error:", err.code);
-      fallback();
-    }
+/**
+ * Subscribe to the user's transactions subcollection.
+ * Uses a limit of 2000 for scalable local caching and memory efficiency.
+ */
+export function subscribeToTransactions(userId, onData) {
+  const q = query(
+    collection(db, "users", userId, "transactions"),
+    orderBy("date", "desc"),
+    limit(2000)
   );
 
-  return () => { clearTimeout(timer); unsub(); };
+  return onSnapshot(q, (snap) => {
+    const txns = [];
+    snap.forEach((docSnap) => {
+      txns.push({ id: docSnap.id, ...docSnap.data() });
+    });
+    onData(txns);
+  }, (err) => {
+    console.error("Firestore transactions subscription error:", err);
+  });
 }
 
 /**
- * Persist data to both localStorage and Firestore.
+ * Add a new transaction (or update an existing one).
+ * Uses setDoc with the provided ID to allow optimistic offline updates reliably.
  */
-export async function saveUserData(userId, data) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
-  const docRef = doc(db, "appData", userId);
-  await setDoc(docRef, data);
+export async function saveTransaction(userId, txn) {
+  const txRef = doc(db, "users", userId, "transactions", txn.id);
+  await setDoc(txRef, {
+    ...txn,
+    createdAt: txn.createdAt || new Date().toISOString(),
+  }, { merge: true });
 }
 
 /**
- * One-time read of users/{uid} to check onboarding status.
- * Returns { onboardingComplete: boolean }.
+ * Delete a transaction.
+ */
+export async function deleteTransaction(userId, txId) {
+  const txRef = doc(db, "users", userId, "transactions", txId);
+  await deleteDoc(txRef);
+}
+
+/**
+ * Check onboarding status.
+ * Uses a timeout and falls back to a simple localStorage flag if completely offline.
  */
 export async function getOnboardingStatus(userId) {
+  const localKey = `paisa_onboarding_${userId}`;
   try {
     const docRef = doc(db, "users", userId);
-    const snap = await getDoc(docRef);
-    if (snap.exists()) {
-      return { onboardingComplete: snap.data().onboardingComplete === true };
+    
+    // 5-second timeout to prevent UI hang on slow networks or offline
+    const snap = await Promise.race([
+      getDoc(docRef),
+      new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000))
+    ]);
+
+    if (snap.exists() && snap.data().onboardingComplete) {
+      localStorage.setItem(localKey, "true");
+      return { onboardingComplete: true };
     }
     return { onboardingComplete: false };
   } catch (err) {
-    console.error("getOnboardingStatus error:", err);
-    return { onboardingComplete: false };
+    console.error("getOnboardingStatus error/timeout:", err.message);
+    const local = localStorage.getItem(localKey);
+    return { onboardingComplete: local === "true" };
   }
 }
 
 /**
- * Writes { onboardingComplete: true } to users/{uid} with merge,
- * so it doesn't overwrite other fields on that document.
+ * Save user config (income, budget, onboarding state).
  */
-export async function setOnboardingComplete(userId) {
+export async function saveUserConfig(userId, config) {
   const docRef = doc(db, "users", userId);
-  await setDoc(docRef, { onboardingComplete: true, updatedAt: new Date().toISOString() }, { merge: true });
-}
-
-/**
- * Persist onboarding inputs to users/{uid}.
- */
-export async function saveOnboardingProfile(userId, { income, savings }) {
-  const docRef = doc(db, "users", userId);
-  await setDoc(
-    docRef,
-    {
-      income,
-      savings,
-      onboardingComplete: true,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true }
-  );
+  if (config.onboardingComplete) {
+    localStorage.setItem(`paisa_onboarding_${userId}`, "true");
+  }
+  await setDoc(docRef, { ...config, updatedAt: new Date().toISOString() }, { merge: true });
 }

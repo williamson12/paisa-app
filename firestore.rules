@@ -2,34 +2,17 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // ── User data: only the authenticated owner can read/write ──────────────
-    match /appData/{userId} {
-
-      allow read, delete: if
-        // Must be signed in
-        request.auth != null &&
-        // Must be the document owner
-        request.auth.uid == userId;
-
-      // ── Write validation (create & update) ─────────────────────────────
-      allow create, update: if
-        request.auth != null &&
-        request.auth.uid == userId &&
-        isValidAppData(request.resource.data);
-    }
-
-    // Onboarding/profile flags: only the authenticated owner can read/write.
+    
     match /users/{userId} {
-      allow read: if request.auth != null && request.auth.uid == userId;
-
-      allow create, update: if
-        request.auth != null &&
-        request.auth.uid == userId &&
-        isValidUserProfile(request.resource.data);
+      allow read, delete: if request.auth != null && request.auth.uid == userId;
+      allow create, update: if request.auth != null && request.auth.uid == userId && isValidUserDoc(request.resource.data);
+      
+      match /transactions/{txId} {
+        allow read, delete: if request.auth != null && request.auth.uid == userId;
+        allow create, update: if request.auth != null && request.auth.uid == userId && isValidTransaction(request.resource.data);
+      }
     }
 
-    // ── Deny everything else by default ─────────────────────────────────────
     match /{document=**} {
       allow read, write: if false;
     }
@@ -37,31 +20,29 @@ service cloud.firestore {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-function isValidAppData(data) {
-  return
-    // Required top-level fields
-    data.keys().hasAll(['monthlyIncome', 'monthlyBudget', 'transactions']) &&
 
-    // Type checks
-    data.monthlyIncome  is number &&
-    data.monthlyBudget  is number &&
-    data.transactions   is list   &&
-
-    // Sane value ranges
-    data.monthlyIncome  >= 0 &&
-    data.monthlyIncome  <= 100000000 &&
-    data.monthlyBudget  >= 0 &&
-    data.monthlyBudget  <= 100000000 &&
-
-    // Transaction list size guard (max 5000 entries)
-    data.transactions.size() <= 5000;
-}
-
-function isValidUserProfile(data) {
-  return
-    data.keys().hasOnly(['income', 'savings', 'onboardingComplete', 'updatedAt']) &&
+function isValidUserDoc(data) {
+  return 
+    data.keys().hasOnly(['monthlyIncome', 'monthlyBudget', 'onboardingComplete', 'updatedAt', 'income', 'savings']) &&
+    (!('monthlyIncome' in data) || (data.monthlyIncome is number && data.monthlyIncome >= 0 && data.monthlyIncome <= 100000000)) &&
+    (!('monthlyBudget' in data) || (data.monthlyBudget is number && data.monthlyBudget >= 0 && data.monthlyBudget <= 100000000)) &&
     (!('income' in data) || (data.income is number && data.income >= 0 && data.income <= 100000000)) &&
     (!('savings' in data) || (data.savings is number && data.savings >= 0 && data.savings <= 100000000)) &&
     (!('onboardingComplete' in data) || data.onboardingComplete is bool) &&
     (!('updatedAt' in data) || data.updatedAt is string);
+}
+
+function isValidTransaction(data) {
+  return
+    data.keys().hasOnly(['id', 'amount', 'category', 'date', 'note', 'payMode', 'type', 'createdAt']) &&
+    data.amount is number &&
+    data.amount > 0 &&
+    data.amount <= 100000000 &&
+    data.category is string &&
+    data.date is string &&
+    data.type in ['income', 'expense'] &&
+    (!('id' in data) || data.id is string) &&
+    (!('note' in data) || (data.note is string && data.note.size() <= 200)) &&
+    (!('payMode' in data) || data.payMode is string) &&
+    (!('createdAt' in data) || data.createdAt is string);
 }

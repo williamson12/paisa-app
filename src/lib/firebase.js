@@ -6,6 +6,11 @@ import {
   onSnapshot,
   getDoc,
   enableIndexedDbPersistence,
+  collection,
+  query,
+  orderBy,
+  limit,
+  deleteDoc,
 } from "firebase/firestore";
 import {
   getAuth,
@@ -41,7 +46,7 @@ enableIndexedDbPersistence(db).catch(() => {});
 
 export {
   db, auth, provider,
-  doc, setDoc, onSnapshot, getDoc,
+  doc, setDoc, onSnapshot, getDoc, collection, query, orderBy, limit, deleteDoc,
   signInWithPopup, signInWithRedirect, getRedirectResult,
   signOut, onAuthStateChanged,
 };

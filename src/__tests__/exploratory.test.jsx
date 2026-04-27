@@ -23,8 +23,11 @@ const {
   mockOnSnapshot,
   mockGetOnboardingStatus,
   mockSetOnboardingComplete,
-  mockSubscribeToUserData,
-  mockSaveUserData,
+  mockSubscribeToUserConfig,
+  mockSubscribeToTransactions,
+  mockSaveTransaction,
+  mockDeleteTransaction,
+  mockSaveUserConfig,
   mockIsMobile,
 } = vi.hoisted(() => ({
   mockSignInWithPopup:    vi.fn(),
@@ -39,8 +42,11 @@ const {
   mockOnSnapshot:         vi.fn(),
   mockGetOnboardingStatus:   vi.fn(),
   mockSetOnboardingComplete: vi.fn().mockResolvedValue(undefined),
-  mockSubscribeToUserData:   vi.fn(),
-  mockSaveUserData:          vi.fn().mockResolvedValue(undefined),
+  mockSubscribeToUserConfig: vi.fn(),
+  mockSubscribeToTransactions: vi.fn(),
+  mockSaveTransaction: vi.fn(),
+  mockDeleteTransaction: vi.fn(),
+  mockSaveUserConfig:          vi.fn().mockResolvedValue(undefined),
   mockIsMobile:              vi.fn(),
 }));
 
@@ -79,33 +85,33 @@ vi.mock('../services/firestore', () => ({
   getOnboardingStatus:   mockGetOnboardingStatus,
   setOnboardingComplete: mockSetOnboardingComplete,
   saveOnboardingProfile: vi.fn().mockResolvedValue(undefined),
-  subscribeToUserData:   mockSubscribeToUserData,
-  saveUserData:          mockSaveUserData,
+  subscribeToUserConfig: mockSubscribeToUserConfig,
+  subscribeToTransactions: mockSubscribeToTransactions,
+  saveTransaction: mockSaveTransaction,
+  deleteTransaction: mockDeleteTransaction,
+  saveUserConfig:          mockSaveUserConfig,
 }));
 
 import { useAuth } from '../hooks/useAuth';
 import { useUserData } from '../hooks/useUserData';
 
-// ─── 6.1 Mobile sign-in uses redirect, not popup ─────────────────────────────
-describe('6.1 Mobile sign-in routing', () => {
+// ─── 6.1 Sign-in uses popup primarily ─────────────────────────────
+describe('6.1 Sign-in routing', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRedirectResult.mockResolvedValue(null);
     mockOnAuthStateChanged.mockImplementation((auth, cb) => { cb(null); return () => {}; });
-    mockSignInWithRedirect.mockResolvedValue(undefined);
+    mockSignInWithPopup.mockResolvedValue(undefined);
   });
 
-  it('calls signInWithRedirect (not signInWithPopup) when isMobile() = true', async () => {
-    mockIsMobile.mockReturnValue(true);
-
+  it('calls signInWithPopup as primary strategy', async () => {
     const { result } = renderHook(() => useAuth());
 
     await act(async () => {
       await result.current.signIn();
     });
 
-    expect(mockSignInWithRedirect).toHaveBeenCalledTimes(1);
-    expect(mockSignInWithPopup).not.toHaveBeenCalled();
+    expect(mockSignInWithPopup).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -116,7 +122,7 @@ describe('6.2 Returning user skips SetupModal', () => {
     // users/{uid} has onboardingComplete: true
     mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete: true });
     // appData/{uid} is absent — onSetup would be called
-    mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+    mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
       onSetup(); // no appData doc
       return () => {};
     });
@@ -142,7 +148,7 @@ describe('6.3 No SetupModal while onboardingChecked is false', () => {
 
     // Make getOnboardingStatus never resolve (simulates pending check)
     mockGetOnboardingStatus.mockReturnValue(new Promise(() => {}));
-    mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+    mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
       onSetup(); // would trigger needsSetup = true
       return () => {};
     });

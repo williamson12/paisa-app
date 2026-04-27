@@ -23,8 +23,11 @@ const {
   mockOnSnapshot,
   mockGetOnboardingStatus,
   mockSetOnboardingComplete,
-  mockSubscribeToUserData,
-  mockSaveUserData,
+  mockSubscribeToUserConfig,
+  mockSubscribeToTransactions,
+  mockSaveTransaction,
+  mockDeleteTransaction,
+  mockSaveUserConfig,
   mockIsMobile,
 } = vi.hoisted(() => ({
   mockSignInWithPopup:    vi.fn(),
@@ -39,8 +42,11 @@ const {
   mockOnSnapshot:         vi.fn(),
   mockGetOnboardingStatus:   vi.fn(),
   mockSetOnboardingComplete: vi.fn().mockResolvedValue(undefined),
-  mockSubscribeToUserData:   vi.fn(),
-  mockSaveUserData:          vi.fn().mockResolvedValue(undefined),
+  mockSubscribeToUserConfig: vi.fn(),
+  mockSubscribeToTransactions: vi.fn(),
+  mockSaveTransaction: vi.fn(),
+  mockDeleteTransaction: vi.fn(),
+  mockSaveUserConfig:          vi.fn().mockResolvedValue(undefined),
   mockIsMobile:              vi.fn(),
 }));
 
@@ -79,8 +85,11 @@ vi.mock('../services/firestore', () => ({
   getOnboardingStatus:   mockGetOnboardingStatus,
   setOnboardingComplete: mockSetOnboardingComplete,
   saveOnboardingProfile: vi.fn().mockResolvedValue(undefined),
-  subscribeToUserData:   mockSubscribeToUserData,
-  saveUserData:          mockSaveUserData,
+  subscribeToUserConfig: mockSubscribeToUserConfig,
+  subscribeToTransactions: mockSubscribeToTransactions,
+  saveTransaction: mockSaveTransaction,
+  deleteTransaction: mockDeleteTransaction,
+  saveUserConfig:          mockSaveUserConfig,
 }));
 
 import { useAuth } from '../hooks/useAuth';
@@ -118,7 +127,7 @@ describe('8.2 New user still sees SetupModal', () => {
 
   it('needsSetup=true when users/{uid} has no onboardingComplete flag', async () => {
     mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete: false });
-    mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+    mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
       onSetup();
       return () => {};
     });
@@ -140,13 +149,13 @@ describe('8.3 Financial data persistence unchanged', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete: false });
-    mockSubscribeToUserData.mockImplementation((uid, onData) => {
-      onData({ monthlyIncome: 50000, monthlyBudget: 30000, transactions: [] });
+    mockSubscribeToUserConfig.mockImplementation((uid, onData) => {
+      onData({ monthlyIncome: 50000 }); mockSubscribeToTransactions.mockImplementation((uid, cb) => { cb([]); return () => {}; });
       return () => {};
     });
   });
 
-  it('save() calls saveUserData with the correct data', async () => {
+  it('save() calls saveUserConfig with the correct data', async () => {
     const { result } = renderHook(() => useUserData('user-save'));
 
     await waitFor(() => expect(result.current.loaded).toBe(true));
@@ -156,7 +165,7 @@ describe('8.3 Financial data persistence unchanged', () => {
       await result.current.save(newData);
     });
 
-    expect(mockSaveUserData).toHaveBeenCalledWith('user-save', newData);
+    expect(mockSaveUserConfig).toHaveBeenCalledWith('user-save', newData);
   });
 });
 
@@ -166,8 +175,8 @@ describe('8.4 setOnboardingComplete writes with merge', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete: false });
-    mockSubscribeToUserData.mockImplementation((uid, onData) => {
-      onData({ monthlyIncome: 50000, transactions: [] });
+    mockSubscribeToUserConfig.mockImplementation((uid, onData) => {
+      onData({ monthlyIncome: 50000 }); mockSubscribeToTransactions.mockImplementation((uid, cb) => { cb([]); return () => {}; });
       return () => {};
     });
   });
@@ -201,9 +210,8 @@ describe('8.4 setOnboardingComplete writes with merge', () => {
 
 // ─── 8.5 Property-based: correct auth method always selected ─────────────────
 // Validates: Property 2
-// **Validates: Requirements 2.1, 3.1**
-describe('8.5 PBT: correct auth method for any isMobile() value', () => {
-  it('always selects the correct auth method based on isMobile()', async () => {
+describe('8.5 PBT: popup auth method always selected first', () => {
+  it('always selects signInWithPopup primarily', async () => {
     await fc.assert(
       fc.asyncProperty(fc.boolean(), async (mobile) => {
         vi.clearAllMocks();
@@ -212,21 +220,13 @@ describe('8.5 PBT: correct auth method for any isMobile() value', () => {
         mockSignInWithPopup.mockResolvedValue({ user: { uid: 'u' } });
         mockSignInWithRedirect.mockResolvedValue(undefined);
 
-        mockIsMobile.mockReturnValue(mobile);
-
         const { result } = renderHook(() => useAuth());
 
         await act(async () => {
           await result.current.signIn();
         });
 
-        if (mobile) {
-          expect(mockSignInWithRedirect).toHaveBeenCalledTimes(1);
-          expect(mockSignInWithPopup).not.toHaveBeenCalled();
-        } else {
-          expect(mockSignInWithPopup).toHaveBeenCalledTimes(1);
-          expect(mockSignInWithRedirect).not.toHaveBeenCalled();
-        }
+        expect(mockSignInWithPopup).toHaveBeenCalledTimes(1);
       }),
       { numRuns: 20 }
     );
@@ -246,9 +246,9 @@ describe('8.6 PBT: SetupModal visibility for any session state', () => {
           vi.clearAllMocks();
 
           mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete });
-          mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+          mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
             if (appDataPresent) {
-              onData({ monthlyIncome: 50000, transactions: [] });
+              onData({ monthlyIncome: 50000 }); mockSubscribeToTransactions.mockImplementation((uid, cb) => { cb([]); return () => {}; });
             } else {
               onSetup();
             }

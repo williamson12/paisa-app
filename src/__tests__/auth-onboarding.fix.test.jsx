@@ -23,8 +23,11 @@ const {
   mockOnSnapshot,
   mockGetOnboardingStatus,
   mockSetOnboardingComplete,
-  mockSubscribeToUserData,
-  mockSaveUserData,
+  mockSubscribeToUserConfig,
+  mockSubscribeToTransactions,
+  mockSaveTransaction,
+  mockDeleteTransaction,
+  mockSaveUserConfig,
   mockIsMobile,
 } = vi.hoisted(() => ({
   mockSignInWithPopup:    vi.fn(),
@@ -39,8 +42,11 @@ const {
   mockOnSnapshot:         vi.fn(),
   mockGetOnboardingStatus:   vi.fn(),
   mockSetOnboardingComplete: vi.fn().mockResolvedValue(undefined),
-  mockSubscribeToUserData:   vi.fn(),
-  mockSaveUserData:          vi.fn().mockResolvedValue(undefined),
+  mockSubscribeToUserConfig: vi.fn(),
+  mockSubscribeToTransactions: vi.fn(),
+  mockSaveTransaction: vi.fn(),
+  mockDeleteTransaction: vi.fn(),
+  mockSaveUserConfig:          vi.fn().mockResolvedValue(undefined),
   mockIsMobile:              vi.fn(),
 }));
 
@@ -79,33 +85,34 @@ vi.mock('../services/firestore', () => ({
   getOnboardingStatus:   mockGetOnboardingStatus,
   setOnboardingComplete: mockSetOnboardingComplete,
   saveOnboardingProfile: vi.fn().mockResolvedValue(undefined),
-  subscribeToUserData:   mockSubscribeToUserData,
-  saveUserData:          mockSaveUserData,
+  subscribeToUserConfig: mockSubscribeToUserConfig,
+  subscribeToTransactions: mockSubscribeToTransactions,
+  saveTransaction: mockSaveTransaction,
+  deleteTransaction: mockDeleteTransaction,
+  saveUserConfig:          mockSaveUserConfig,
 }));
 
 import { useAuth } from '../hooks/useAuth';
 import { useUserData } from '../hooks/useUserData';
 
-// ─── 7.1 signIn() calls signInWithRedirect when isMobile() = true ─────────────
+// ─── 7.1 signIn() uses popup as primary regardless of device ─────────────
 // Validates: Property 1
-describe('7.1 Mobile auth uses redirect', () => {
+describe('7.1 Auth uses popup primary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetRedirectResult.mockResolvedValue(null);
     mockOnAuthStateChanged.mockImplementation((auth, cb) => { cb(null); return () => {}; });
-    mockSignInWithRedirect.mockResolvedValue(undefined);
+    mockSignInWithPopup.mockResolvedValue(undefined);
   });
 
-  it('calls signInWithRedirect when isMobile() = true', async () => {
-    mockIsMobile.mockReturnValue(true);
+  it('calls signInWithPopup primarily', async () => {
     const { result } = renderHook(() => useAuth());
 
     await act(async () => {
       await result.current.signIn();
     });
 
-    expect(mockSignInWithRedirect).toHaveBeenCalledTimes(1);
-    expect(mockSignInWithPopup).not.toHaveBeenCalled();
+    expect(mockSignInWithPopup).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -142,7 +149,7 @@ describe('7.3 Returning user needsSetup override', () => {
 
   it('sets needsSetup=false when onboardingComplete=true even if appData is absent', async () => {
     mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete: true });
-    mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+    mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
       onSetup();
       return () => {};
     });
@@ -205,7 +212,7 @@ describe('7.5 No SetupModal while onboardingChecked is false', () => {
     vi.clearAllMocks();
     // onboardingChecked never resolves
     mockGetOnboardingStatus.mockReturnValue(new Promise(() => {}));
-    mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+    mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
       onSetup();
       return () => {};
     });
@@ -223,7 +230,7 @@ describe('7.6 No SetupModal when onboardingComplete=true after check resolves', 
   it('needsSetup is false when onboardingComplete=true after onboardingChecked resolves', async () => {
     vi.clearAllMocks();
     mockGetOnboardingStatus.mockResolvedValue({ onboardingComplete: true });
-    mockSubscribeToUserData.mockImplementation((uid, onData, onSetup) => {
+    mockSubscribeToUserConfig.mockImplementation((uid, onData, onSetup) => {
       onSetup(); // appData absent
       return () => {};
     });
