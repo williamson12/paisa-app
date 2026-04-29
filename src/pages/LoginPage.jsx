@@ -32,143 +32,203 @@ function InAppBrowserOverlay({ appName }) {
   };
 
   return (
-    <div style={styles.overlay}>
+    <div style={S.overlay}>
       <motion.div
-        style={styles.card}
-        initial={{ opacity: 0, scale: 0.92, y: 24 }}
+        style={S.card}
+        initial={{ opacity: 0, scale: 0.93, y: 28 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+        transition={{ duration: 0.5, ease: [0.4, 0, 0.2, 1] }}
       >
-        {/* Icon */}
-        <div style={styles.iconWrap}>
-          <span style={styles.icon}>🔒</span>
-        </div>
+        {/* Logo badge — mirrors .login-logo */}
+        <motion.div
+          style={S.logoBadge}
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.1, type: "spring", stiffness: 300, damping: 22 }}
+        >
+          🔒
+        </motion.div>
 
-        <h2 style={styles.heading}>Open in {systemBrowser}</h2>
+        {/* Heading — Bricolage Grotesque like .login-brand */}
+        <h2 style={S.heading}>Open in {systemBrowser}</h2>
 
-        <p style={styles.body}>
-          Google sign-in is blocked inside <strong>{name}</strong>'s browser for
-          security reasons.
+        {/* Sub-text */}
+        <p style={S.body}>
+          Google sign-in is blocked inside{" "}
+          <span style={S.accent}>{name}</span>'s browser for security reasons.
         </p>
-        <p style={styles.body}>
-          Please open this page in <strong>{systemBrowser}</strong> to continue.
+        <p style={S.bodyDim}>
+          Open this page in <span style={S.accent}>{systemBrowser}</span> to continue.
         </p>
 
-        {/* Step list */}
-        <ol style={styles.steps}>
-          <li style={styles.step}>
-            Tap the <strong>⋯</strong> or <strong>⋮</strong> menu in the top
-            corner of {name}.
-          </li>
-          <li style={styles.step}>
-            Choose <strong>"Open in {systemBrowser}"</strong> or{" "}
-            <strong>"Open in browser"</strong>.
-          </li>
-          <li style={styles.step}>
-            Sign in with Google on the page that opens.
-          </li>
+        {/* Divider */}
+        <div style={S.divider} />
+
+        {/* Steps — styled like subtle .gc cards */}
+        <ol style={S.steps}>
+          {[
+            <>Tap the <span style={S.mono}>⋯</span> or <span style={S.mono}>⋮</span> menu in the top corner of <span style={S.accent}>{name}</span>.</>,
+            <>Choose <span style={S.accent}>"Open in {systemBrowser}"</span> or <span style={S.accent}>"Open in browser"</span>.</>,
+            <>Sign in with Google on the page that opens.</>,
+          ].map((text, i) => (
+            <li key={i} style={S.stepItem}>
+              <span style={S.stepNum}>{i + 1}</span>
+              <span style={S.stepText}>{text}</span>
+            </li>
+          ))}
         </ol>
 
-        {/* CTA — works reliably on Android, partial help on iOS */}
+        {/* CTA — mirrors .ctab (lime→green gradient, black text) */}
         <motion.button
           id="open-system-browser-btn"
-          style={styles.button}
+          style={S.cta}
           onClick={handleOpenBrowser}
-          whileTap={{ scale: 0.97 }}
+          whileHover={{ boxShadow: "0 12px 32px rgba(200,250,100,0.22)" }}
+          whileTap={{ scale: 0.98 }}
+          transition={{ type: "spring", stiffness: 400, damping: 28 }}
         >
           Open in {systemBrowser}
         </motion.button>
 
-        <p style={styles.footnote}>
+        {/* Legal-style footnote — mirrors .login-legal */}
+        <p style={S.footnote}>
           If the button doesn't work, copy the URL from the address bar and
-          paste it into {systemBrowser}.
+          paste it directly into {systemBrowser}.
         </p>
       </motion.div>
     </div>
   );
 }
 
-const styles = {
+// ── Design tokens aligned with index.css ─────────────────────────────────────
+const S = {
   overlay: {
     position: "fixed",
     inset: 0,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    background: "linear-gradient(135deg, #0f0f14 0%, #1a1a2e 100%)",
-    padding: "24px",
+    // Mirrors .login-root: pure black + subtle lime radial glow
+    background: "radial-gradient(ellipse at 60% 0%, rgba(200,250,100,0.06) 0%, transparent 60%), #000",
+    padding: "24px 20px",
     zIndex: 9999,
-    fontFamily: "'Inter', system-ui, sans-serif",
+    fontFamily: "'Outfit', sans-serif",
   },
   card: {
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.12)",
-    borderRadius: "20px",
-    padding: "32px 28px",
-    maxWidth: "400px",
     width: "100%",
-    textAlign: "center",
-    backdropFilter: "blur(16px)",
-    boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+    maxWidth: "400px",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
   },
-  iconWrap: {
-    width: 64,
-    height: 64,
-    borderRadius: "50%",
-    background: "rgba(255,180,0,0.15)",
-    border: "1px solid rgba(255,180,0,0.3)",
+  // Mirrors .login-logo
+  logoBadge: {
+    width: 76,
+    height: 76,
+    borderRadius: "24px",
+    background: "rgba(200,250,100,0.1)",
+    border: "1px solid rgba(200,250,100,0.2)",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    margin: "0 auto 20px",
+    fontSize: 36,
+    marginBottom: 28,
   },
-  icon: { fontSize: 28 },
+  // Mirrors .login-brand
   heading: {
-    fontSize: 22,
-    fontWeight: 700,
-    color: "#f5f5f7",
-    margin: "0 0 12px",
-    letterSpacing: "-0.3px",
+    fontFamily: "'Bricolage Grotesque', serif",
+    fontSize: 36,
+    fontWeight: 900,
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 12,
+    letterSpacing: "-0.5px",
   },
   body: {
     fontSize: 14,
-    color: "rgba(255,255,255,0.65)",
-    lineHeight: 1.6,
-    margin: "0 0 10px",
+    color: "#a1a1aa",
+    textAlign: "center",
+    lineHeight: 1.7,
+    marginBottom: 6,
   },
+  bodyDim: {
+    fontSize: 14,
+    color: "#52525b",
+    textAlign: "center",
+    lineHeight: 1.7,
+    marginBottom: 0,
+  },
+  accent: {
+    color: "#C8FA64",
+    fontWeight: 600,
+  },
+  mono: {
+    fontFamily: "monospace",
+    color: "#E8E8F0",
+    fontWeight: 700,
+  },
+  divider: {
+    width: "100%",
+    height: 1,
+    background: "rgba(255,255,255,0.06)",
+    margin: "24px 0",
+  },
+  // Step list — no ol default styling
   steps: {
-    textAlign: "left",
-    margin: "18px 0 22px",
-    paddingLeft: "20px",
+    listStyle: "none",
+    padding: 0,
+    margin: "0 0 28px",
+    width: "100%",
     display: "flex",
     flexDirection: "column",
     gap: 10,
   },
-  step: {
-    fontSize: 14,
-    color: "rgba(255,255,255,0.75)",
-    lineHeight: 1.55,
+  // Each step mirrors a .gc card
+  stepItem: {
+    display: "flex",
+    alignItems: "flex-start",
+    gap: 12,
+    background: "rgba(255,255,255,0.026)",
+    border: "1px solid rgba(255,255,255,0.07)",
+    borderRadius: "16px",
+    padding: "14px 16px",
   },
-  button: {
-    display: "block",
-    width: "100%",
-    padding: "14px 20px",
-    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
-    color: "#fff",
-    border: "none",
-    borderRadius: "12px",
-    fontSize: 15,
-    fontWeight: 600,
-    cursor: "pointer",
-    letterSpacing: "0.2px",
-    boxShadow: "0 4px 20px rgba(102,126,234,0.4)",
-    marginBottom: 14,
-  },
-  footnote: {
-    fontSize: 12,
-    color: "rgba(255,255,255,0.35)",
+  stepNum: {
+    fontFamily: "'Bricolage Grotesque', serif",
+    fontSize: 13,
+    fontWeight: 800,
+    color: "#C8FA64",
+    minWidth: 20,
     lineHeight: 1.5,
-    margin: 0,
+    flexShrink: 0,
+  },
+  stepText: {
+    fontSize: 13,
+    color: "#a1a1aa",
+    lineHeight: 1.6,
+  },
+  // Mirrors .ctab
+  cta: {
+    width: "100%",
+    padding: "16px 24px",
+    background: "linear-gradient(135deg, #C8FA64, #86EFAC)",
+    color: "#000",
+    border: "none",
+    borderRadius: "16px",
+    fontFamily: "'Outfit', sans-serif",
+    fontSize: 15,
+    fontWeight: 800,
+    cursor: "pointer",
+    letterSpacing: "0.02em",
+    marginBottom: 20,
+    boxShadow: "0 4px 24px rgba(200,250,100,0.15)",
+  },
+  // Mirrors .login-legal
+  footnote: {
+    fontSize: 11,
+    color: "#52525b",
+    textAlign: "center",
+    lineHeight: 1.7,
   },
 };
 // ─────────────────────────────────────────────────────────────────────────────
