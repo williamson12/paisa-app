@@ -1,6 +1,184 @@
 import { motion } from "framer-motion";
+import { isInAppBrowser, getInAppBrowserName } from "../utils/inAppBrowser";
+
+// ─── In-App Browser Gate ────────────────────────────────────────────────────
+// Rendered BEFORE any Firebase call when Google OAuth is known to be blocked.
+// The overlay is purely instructional — no auth state is modified.
+function InAppBrowserOverlay({ appName }) {
+  const name = appName || "this app";
+
+  // Detect OS so we can name the correct system browser.
+  const isIOS = /iP(hone|ad|od)/i.test(navigator.userAgent);
+  const systemBrowser = isIOS ? "Safari" : "Chrome";
+
+  // Best-effort: try to open the current URL in the system browser.
+  // Works on Android via intent:// scheme; on iOS the user must do it manually.
+  const handleOpenBrowser = () => {
+    const url = window.location.href;
+    if (/Android/i.test(navigator.userAgent)) {
+      // Android intent URL forces the system browser
+      window.location.href =
+        "intent://" +
+        url.replace(/^https?:\/\//, "") +
+        "#Intent;scheme=https;action=android.intent.action.VIEW;end";
+    } else {
+      // iOS: copy URL to clipboard as a fallback hint
+      if (navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(url).catch(() => {});
+      }
+      // Attempt to open — may or may not work depending on the app
+      window.open(url, "_blank", "noopener");
+    }
+  };
+
+  return (
+    <div style={styles.overlay}>
+      <motion.div
+        style={styles.card}
+        initial={{ opacity: 0, scale: 0.92, y: 24 }}
+        animate={{ opacity: 1, scale: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: [0.4, 0, 0.2, 1] }}
+      >
+        {/* Icon */}
+        <div style={styles.iconWrap}>
+          <span style={styles.icon}>🔒</span>
+        </div>
+
+        <h2 style={styles.heading}>Open in {systemBrowser}</h2>
+
+        <p style={styles.body}>
+          Google sign-in is blocked inside <strong>{name}</strong>'s browser for
+          security reasons.
+        </p>
+        <p style={styles.body}>
+          Please open this page in <strong>{systemBrowser}</strong> to continue.
+        </p>
+
+        {/* Step list */}
+        <ol style={styles.steps}>
+          <li style={styles.step}>
+            Tap the <strong>⋯</strong> or <strong>⋮</strong> menu in the top
+            corner of {name}.
+          </li>
+          <li style={styles.step}>
+            Choose <strong>"Open in {systemBrowser}"</strong> or{" "}
+            <strong>"Open in browser"</strong>.
+          </li>
+          <li style={styles.step}>
+            Sign in with Google on the page that opens.
+          </li>
+        </ol>
+
+        {/* CTA — works reliably on Android, partial help on iOS */}
+        <motion.button
+          id="open-system-browser-btn"
+          style={styles.button}
+          onClick={handleOpenBrowser}
+          whileTap={{ scale: 0.97 }}
+        >
+          Open in {systemBrowser}
+        </motion.button>
+
+        <p style={styles.footnote}>
+          If the button doesn't work, copy the URL from the address bar and
+          paste it into {systemBrowser}.
+        </p>
+      </motion.div>
+    </div>
+  );
+}
+
+const styles = {
+  overlay: {
+    position: "fixed",
+    inset: 0,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    background: "linear-gradient(135deg, #0f0f14 0%, #1a1a2e 100%)",
+    padding: "24px",
+    zIndex: 9999,
+    fontFamily: "'Inter', system-ui, sans-serif",
+  },
+  card: {
+    background: "rgba(255,255,255,0.05)",
+    border: "1px solid rgba(255,255,255,0.12)",
+    borderRadius: "20px",
+    padding: "32px 28px",
+    maxWidth: "400px",
+    width: "100%",
+    textAlign: "center",
+    backdropFilter: "blur(16px)",
+    boxShadow: "0 24px 64px rgba(0,0,0,0.6)",
+  },
+  iconWrap: {
+    width: 64,
+    height: 64,
+    borderRadius: "50%",
+    background: "rgba(255,180,0,0.15)",
+    border: "1px solid rgba(255,180,0,0.3)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    margin: "0 auto 20px",
+  },
+  icon: { fontSize: 28 },
+  heading: {
+    fontSize: 22,
+    fontWeight: 700,
+    color: "#f5f5f7",
+    margin: "0 0 12px",
+    letterSpacing: "-0.3px",
+  },
+  body: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.65)",
+    lineHeight: 1.6,
+    margin: "0 0 10px",
+  },
+  steps: {
+    textAlign: "left",
+    margin: "18px 0 22px",
+    paddingLeft: "20px",
+    display: "flex",
+    flexDirection: "column",
+    gap: 10,
+  },
+  step: {
+    fontSize: 14,
+    color: "rgba(255,255,255,0.75)",
+    lineHeight: 1.55,
+  },
+  button: {
+    display: "block",
+    width: "100%",
+    padding: "14px 20px",
+    background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
+    color: "#fff",
+    border: "none",
+    borderRadius: "12px",
+    fontSize: 15,
+    fontWeight: 600,
+    cursor: "pointer",
+    letterSpacing: "0.2px",
+    boxShadow: "0 4px 20px rgba(102,126,234,0.4)",
+    marginBottom: 14,
+  },
+  footnote: {
+    fontSize: 12,
+    color: "rgba(255,255,255,0.35)",
+    lineHeight: 1.5,
+    margin: 0,
+  },
+};
+// ─────────────────────────────────────────────────────────────────────────────
 
 export function LoginPage({ onSignIn, error, loading }) {
+  // Show blocking overlay for in-app browsers before any auth UI.
+  if (isInAppBrowser()) {
+    return <InAppBrowserOverlay appName={getInAppBrowserName()} />;
+  }
+
   return (
     <div className="login-root">
       <motion.div
